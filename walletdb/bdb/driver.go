@@ -19,7 +19,7 @@ package bdb
 import (
 	"fmt"
 
-	"github.com/mably/ppcwallet/walletdb"
+	"github.com/ppcsuite/ppcwallet/walletdb"
 )
 
 const (

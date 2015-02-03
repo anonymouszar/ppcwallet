@@ -22,8 +22,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mably/ppcwallet/walletdb"
-	_ "github.com/mably/ppcwallet/walletdb/bdb"
+	"github.com/ppcsuite/ppcwallet/walletdb"
+	_ "github.com/ppcsuite/ppcwallet/walletdb/bdb"
 )
 
 // dbType is the database type name for this driver.

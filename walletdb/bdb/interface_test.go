@@ -29,7 +29,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mably/ppcwallet/walletdb"
+	"github.com/ppcsuite/ppcwallet/walletdb"
 )
 
 // subTestFailError is used to signal that a sub test returned false.

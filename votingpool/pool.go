@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/mably/btcutil"
-	"github.com/mably/btcutil/hdkeychain"
-	"github.com/mably/ppcd/txscript"
-	"github.com/mably/ppcwallet/waddrmgr"
-	"github.com/mably/ppcwallet/walletdb"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcutil/hdkeychain"
+	"github.com/ppcsuite/ppcd/txscript"
+	"github.com/ppcsuite/ppcwallet/waddrmgr"
+	"github.com/ppcsuite/ppcwallet/walletdb"
 )
 
 const (

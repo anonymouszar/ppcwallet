@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mably/btcnet"
-	"github.com/mably/btcutil"
-	. "github.com/mably/ppcwallet/txstore"
-	"github.com/mably/btcwire"
+	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/btcutil"
+	. "github.com/ppcsuite/ppcwallet/txstore"
+	"github.com/ppcsuite/btcwire"
 )
 
 // Received transaction output for mainnet outpoint

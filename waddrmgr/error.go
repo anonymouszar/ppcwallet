@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/mably/btcutil/hdkeychain"
+	"github.com/ppcsuite/btcutil/hdkeychain"
 )
 
 var (

@@ -17,7 +17,7 @@
 package main
 
 import (
-	"github.com/mably/btcnet"
+	"github.com/ppcsuite/btcnet"
 )
 
 var activeNet = &testNet3Params

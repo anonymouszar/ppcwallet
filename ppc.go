@@ -9,13 +9,13 @@ import (
 	"time"
 
 	"github.com/kac-/umint"
-	"github.com/mably/btcjson"
-	"github.com/mably/btcutil"
-	"github.com/mably/btcwire"
-	"github.com/mably/btcws"
-	"github.com/mably/ppcutil"
-	"github.com/mably/ppcwallet/chain"
-	"github.com/mably/ppcwallet/txstore"
+	"github.com/ppcsuite/btcjson"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/btcws"
+	"github.com/ppcsuite/ppcutil"
+	"github.com/ppcsuite/ppcwallet/chain"
+	"github.com/ppcsuite/ppcwallet/txstore"
 )
 
 func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {

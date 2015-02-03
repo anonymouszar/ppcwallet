@@ -24,8 +24,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mably/btcutil"
-	"github.com/mably/btcwire"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcwire"
 	"github.com/btcsuite/go-flags"
 )
 

@@ -12,11 +12,11 @@ package main
 import (
 	"testing"
 
-	"github.com/mably/btcutil"
-	"github.com/mably/btcwire"
-	"github.com/mably/ppcd/txscript"
-	"github.com/mably/ppcwallet/tx"
-	"github.com/mably/ppcwallet/wallet"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/txscript"
+	"github.com/ppcsuite/ppcwallet/tx"
+	"github.com/ppcsuite/ppcwallet/wallet"
 )
 
 func init() {

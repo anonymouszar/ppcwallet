@@ -7,7 +7,7 @@ package chain
 import (
 	"errors"
 
-	"github.com/mably/btcnet"
+	"github.com/ppcsuite/btcnet"
 )
 
 func (c *Client) Params() (*btcnet.Params, error) {

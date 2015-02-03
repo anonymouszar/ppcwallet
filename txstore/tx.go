@@ -24,10 +24,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mably/btcnet"
-	"github.com/mably/btcutil"
-	"github.com/mably/btcwire"
-	"github.com/mably/ppcd/txscript"
+	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/txscript"
 )
 
 var (

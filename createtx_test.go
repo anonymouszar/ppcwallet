@@ -6,11 +6,11 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/mably/btcutil"
-	"github.com/mably/btcwire"
-	"github.com/mably/ppcd/txscript"
-	"github.com/mably/ppcwallet/keystore"
-	"github.com/mably/ppcwallet/txstore"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/txscript"
+	"github.com/ppcsuite/ppcwallet/keystore"
+	"github.com/ppcsuite/ppcwallet/txstore"
 )
 
 // This is a tx that transfers funds (0.371 BTC) to addresses of known privKeys.

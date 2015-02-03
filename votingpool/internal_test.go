@@ -17,9 +17,9 @@
 package votingpool
 
 import (
-	"github.com/mably/btcutil/hdkeychain"
-	"github.com/mably/ppcwallet/waddrmgr"
-	"github.com/mably/ppcwallet/walletdb"
+	"github.com/ppcsuite/btcutil/hdkeychain"
+	"github.com/ppcsuite/ppcwallet/waddrmgr"
+	"github.com/ppcsuite/ppcwallet/walletdb"
 )
 
 // TstPutSeries transparently wraps the voting pool putSeries method.

@@ -21,9 +21,9 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/mably/ppcwallet/snacl"
-	"github.com/mably/ppcwallet/waddrmgr"
-	"github.com/mably/ppcwallet/walletdb"
+	"github.com/ppcsuite/ppcwallet/snacl"
+	"github.com/ppcsuite/ppcwallet/waddrmgr"
+	"github.com/ppcsuite/ppcwallet/walletdb"
 )
 
 // These constants define the serialized length for a given encrypted extended

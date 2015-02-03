@@ -26,13 +26,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mably/btcjson"
-	"github.com/mably/btcnet"
-	"github.com/mably/btcutil"
-	"github.com/mably/btcwire"
-	"github.com/mably/ppcwallet/chain"
-	"github.com/mably/ppcwallet/keystore"
-	"github.com/mably/ppcwallet/txstore"
+	"github.com/ppcsuite/btcjson"
+	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcwallet/chain"
+	"github.com/ppcsuite/ppcwallet/keystore"
+	"github.com/ppcsuite/ppcwallet/txstore"
 )
 
 var (

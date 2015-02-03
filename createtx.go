@@ -23,11 +23,11 @@ import (
 	"sort"
 	"time"
 
-	"github.com/mably/btcutil"
-	"github.com/mably/ppcd/txscript"
-	"github.com/mably/ppcwallet/keystore"
-	"github.com/mably/ppcwallet/txstore"
-	"github.com/mably/btcwire"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/ppcd/txscript"
+	"github.com/ppcsuite/ppcwallet/keystore"
+	"github.com/ppcsuite/ppcwallet/txstore"
+	"github.com/ppcsuite/btcwire"
 )
 
 const (

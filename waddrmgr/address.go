@@ -23,8 +23,8 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcec"
-	"github.com/mably/btcutil"
-	"github.com/mably/btcutil/hdkeychain"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcutil/hdkeychain"
 )
 
 // zero sets all bytes in the passed slice to zero.  This is used to

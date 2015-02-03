@@ -1,8 +1,8 @@
 ppcwallet
 =========
 
-[![Build Status](https://travis-ci.org/mably/ppcwallet.png?branch=mably)]
-(https://travis-ci.org/mably/ppcwallet)
+[![Build Status](https://travis-ci.org/ppcsuite/ppcwallet.png?branch=mably)]
+(https://travis-ci.org/ppcsuite/ppcwallet)
 [![tip for next commit](http://peer4commit.com/projects/130.svg)](http://peer4commit.com/projects/130)
 
 ppcwallet is a daemon handling bitcoin wallet functionality for a
@@ -21,7 +21,7 @@ client is required to provide a wallet encryption passphrase.
 ppcwallet is not an SPV client and requires connecting to a local or
 remote ppcd instance for asynchronous blockchain queries and
 notifications over websockets.  Full ppcd installation instructions
-can be found [here](https://github.com/mably/ppcd).
+can be found [here](https://github.com/ppcsuite/ppcd).
 
 As a daemon, ppcwallet provides no user interface and an additional
 graphical or command line client is required for normal, personal
@@ -43,8 +43,8 @@ network is currently disabled by default.
 - Run the following commands to obtain and install ppcwallet and all
   dependencies:
 ```bash
-$ go get -u -v github.com/mably/ppcd/...
-$ go get -u -v github.com/mably/ppcwallet/...
+$ go get -u -v github.com/ppcsuite/ppcd/...
+$ go get -u -v github.com/ppcsuite/ppcwallet/...
 ```
 
 - ppcd and ppcwallet will now be installed in either ```$GOROOT/bin``` or
@@ -58,8 +58,8 @@ $ go get -u -v github.com/mably/ppcwallet/...
 - Run the following commands to update ppcwallet, all dependencies, and install it:
 
 ```bash
-$ go get -u -v github.com/mably/ppcd/...
-$ go get -u -v github.com/mably/ppcwallet/...
+$ go get -u -v github.com/ppcsuite/ppcd/...
+$ go get -u -v github.com/ppcsuite/ppcwallet/...
 ```
 
 ## Getting Started
@@ -88,8 +88,8 @@ copy the sample ppcd and ppcwallet configurations and update with your
 RPC username and password.
 
 ```bash
-$ cp $GOPATH/src/github.com/mably/ppcd/sample-btcd.conf ~/.ppcd/ppcd.conf
-$ cp $GOPATH/src/github.com/mably/ppcwallet/sample-btcwallet.conf ~/.ppcwallet/ppcwallet.conf
+$ cp $GOPATH/src/github.com/ppcsuite/ppcd/sample-btcd.conf ~/.ppcd/ppcd.conf
+$ cp $GOPATH/src/github.com/ppcsuite/ppcwallet/sample-btcwallet.conf ~/.ppcwallet/ppcwallet.conf
 $ $EDITOR ~/.ppcd/ppcd.conf
 $ $EDITOR ~/.ppcwallet/ppcwallet.conf
 ```
@@ -108,7 +108,7 @@ JSON (un)marshaling these requests and notifications.
 
 ## Issue Tracker
 
-The [integrated github issue tracker](https://github.com/mably/ppcwallet/issues)
+The [integrated github issue tracker](https://github.com/ppcsuite/ppcwallet/issues)
 is used for this project.
 
 <!--## GPG Verification Key

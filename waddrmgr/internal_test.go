@@ -26,7 +26,7 @@ package waddrmgr
 import (
 	"errors"
 
-	"github.com/mably/ppcwallet/snacl"
+	"github.com/ppcsuite/ppcwallet/snacl"
 )
 
 // TstMaxRecentHashes makes the unexported maxRecentHashes constant available

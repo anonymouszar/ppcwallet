@@ -21,7 +21,7 @@ import (
 	"os"
 
 	"github.com/btcsuite/bolt"
-	"github.com/mably/ppcwallet/walletdb"
+	"github.com/ppcsuite/ppcwallet/walletdb"
 )
 
 // convertErr converts some bolt errors to the equivalent walletdb error.

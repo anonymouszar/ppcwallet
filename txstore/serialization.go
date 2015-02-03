@@ -27,9 +27,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/mably/btcutil"
-	"github.com/mably/ppcwallet/rename"
-	"github.com/mably/btcwire"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/ppcwallet/rename"
+	"github.com/ppcsuite/btcwire"
 )
 
 // filename is the name of the file typically used to save a transaction

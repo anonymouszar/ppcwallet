@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mably/ppcwallet/walletdb"
-	"github.com/mably/btcwire"
+	"github.com/ppcsuite/ppcwallet/walletdb"
+	"github.com/ppcsuite/btcwire"
 	"github.com/btcsuite/fastsha256"
 )
 

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/mably/ppcwallet/waddrmgr"
+	"github.com/ppcsuite/ppcwallet/waddrmgr"
 )
 
 // TestErrorCodeStringer tests the stringized output for the ErrorCode type.

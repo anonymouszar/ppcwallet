@@ -21,13 +21,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mably/btcnet"
-	"github.com/mably/btcrpcclient"
-	"github.com/mably/btcutil"
-	"github.com/mably/btcwire"
-	"github.com/mably/btcws"
-	"github.com/mably/ppcwallet/keystore"
-	"github.com/mably/ppcwallet/txstore"
+	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/btcrpcclient"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/btcws"
+	"github.com/ppcsuite/ppcwallet/keystore"
+	"github.com/ppcsuite/ppcwallet/txstore"
 )
 
 type Client struct {

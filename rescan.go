@@ -17,10 +17,10 @@
 package main
 
 import (
-	"github.com/mably/btcutil"
-	"github.com/mably/ppcwallet/chain"
-	"github.com/mably/ppcwallet/keystore"
-	"github.com/mably/btcwire"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/ppcwallet/chain"
+	"github.com/ppcsuite/ppcwallet/keystore"
+	"github.com/ppcsuite/btcwire"
 )
 
 // RescanProgressMsg reports the current progress made by a rescan for a

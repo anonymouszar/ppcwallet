@@ -23,12 +23,12 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcec"
-	"github.com/mably/btcnet"
-	"github.com/mably/btcutil"
-	"github.com/mably/btcutil/hdkeychain"
-	"github.com/mably/ppcwallet/snacl"
-	"github.com/mably/ppcwallet/walletdb"
-	"github.com/mably/btcwire"
+	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcutil/hdkeychain"
+	"github.com/ppcsuite/ppcwallet/snacl"
+	"github.com/ppcsuite/ppcwallet/walletdb"
+	"github.com/ppcsuite/btcwire"
 )
 
 const (

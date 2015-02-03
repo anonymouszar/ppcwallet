@@ -21,8 +21,8 @@ import (
 	"os"
 
 	"github.com/btcsuite/btclog"
-	"github.com/mably/ppcwallet/chain"
-	"github.com/mably/ppcwallet/txstore"
+	"github.com/ppcsuite/ppcwallet/chain"
+	"github.com/ppcsuite/ppcwallet/txstore"
 	"github.com/btcsuite/seelog"
 )
 

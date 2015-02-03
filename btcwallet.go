@@ -24,7 +24,7 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/mably/ppcwallet/chain"
+	"github.com/ppcsuite/ppcwallet/chain"
 )
 
 var (

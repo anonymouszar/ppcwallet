@@ -39,15 +39,15 @@ import (
 
 	"github.com/btcsuite/btcec"
 	"github.com/btcsuite/websocket"
-	"github.com/mably/btcjson"
-	"github.com/mably/btcrpcclient"
-	"github.com/mably/btcutil"
-	"github.com/mably/btcwire"
-	"github.com/mably/btcws"
-	"github.com/mably/ppcd/txscript"
-	"github.com/mably/ppcwallet/chain"
-	"github.com/mably/ppcwallet/keystore"
-	"github.com/mably/ppcwallet/txstore"
+	"github.com/ppcsuite/btcjson"
+	"github.com/ppcsuite/btcrpcclient"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/btcws"
+	"github.com/ppcsuite/ppcd/txscript"
+	"github.com/ppcsuite/ppcwallet/chain"
+	"github.com/ppcsuite/ppcwallet/keystore"
+	"github.com/ppcsuite/ppcwallet/txstore"
 )
 
 // Error types to simplify the reporting of specific categories of
