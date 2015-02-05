@@ -7,8 +7,8 @@ import (
 	"testing"
 
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcd/txscript"
+	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/keystore"
 	"github.com/ppcsuite/ppcwallet/txstore"
 )
@@ -41,7 +41,7 @@ var (
 )
 
 func Test_addOutputs(t *testing.T) {
-	msgtx := btcwire.NewMsgTx()
+	msgtx := wire.NewMsgTx()
 	pairs := map[string]btcutil.Amount{outAddr1: 10, outAddr2: 1}
 	if _, err := addOutputs(msgtx, pairs); err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func TestCreateTxInsufficientFundsError(t *testing.T) {
 }
 
 // checkOutputsMatch checks that the outputs in the tx match the expected ones.
-func checkOutputsMatch(t *testing.T, msgtx *btcwire.MsgTx, expected map[string]btcutil.Amount) {
+func checkOutputsMatch(t *testing.T, msgtx *wire.MsgTx, expected map[string]btcutil.Amount) {
 	// This is a bit convoluted because the index of the change output is randomized.
 	for addrStr, v := range expected {
 		addr, err := btcutil.DecodeAddress(addrStr, activeNet.Params)

@@ -21,9 +21,9 @@ import (
 	"os"
 
 	"github.com/btcsuite/btclog"
+	"github.com/btcsuite/seelog"
 	"github.com/ppcsuite/ppcwallet/chain"
 	"github.com/ppcsuite/ppcwallet/txstore"
-	"github.com/btcsuite/seelog"
 )
 
 const (

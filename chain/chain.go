@@ -165,12 +165,12 @@ type (
 		Block *txstore.Block // nil if unmined
 	}
 	RescanProgress struct {
-		Hash   *btcwire.ShaHash
+		Hash   *wire.ShaHash
 		Height int32
 		Time   time.Time
 	}
 	RescanFinished struct {
-		Hash   *btcwire.ShaHash
+		Hash   *wire.ShaHash
 		Height int32
 		Time   time.Time
 	}
@@ -183,7 +183,7 @@ func parseBlock(block *btcws.BlockDetails) (blk *txstore.Block, idx int, offset 
 	if block == nil {
 		return nil, btcutil.TxIndexUnknown, btcutil.TxOffsetUnknown, nil
 	}
-	blksha, err := btcwire.NewShaHashFromStr(block.Hash)
+	blksha, err := wire.NewShaHashFromStr(block.Hash)
 	if err != nil {
 		return nil, btcutil.TxIndexUnknown, btcutil.TxOffsetUnknown, err
 	}
@@ -201,11 +201,11 @@ func (c *Client) onClientConnect() {
 	c.notifyConnected(true)
 }
 
-func (c *Client) onBlockConnected(hash *btcwire.ShaHash, height int32) {
+func (c *Client) onBlockConnected(hash *wire.ShaHash, height int32) {
 	c.enqueueNotification <- BlockConnected{Hash: hash, Height: height}
 }
 
-func (c *Client) onBlockDisconnected(hash *btcwire.ShaHash, height int32) {
+func (c *Client) onBlockDisconnected(hash *wire.ShaHash, height int32) {
 	c.enqueueNotification <- BlockDisconnected{Hash: hash, Height: height}
 }
 
@@ -245,11 +245,11 @@ func (c *Client) onRedeemingTx(tx *btcutil.Tx, block *btcws.BlockDetails) {
 	c.enqueueNotification <- RedeemingTx{tx, blk}
 }
 
-func (c *Client) onRescanProgress(hash *btcwire.ShaHash, height int32, blkTime time.Time) {
+func (c *Client) onRescanProgress(hash *wire.ShaHash, height int32, blkTime time.Time) {
 	c.enqueueNotification <- &RescanProgress{hash, height, blkTime}
 }
 
-func (c *Client) onRescanFinished(hash *btcwire.ShaHash, height int32, blkTime time.Time) {
+func (c *Client) onRescanFinished(hash *wire.ShaHash, height int32, blkTime time.Time) {
 	c.enqueueNotification <- &RescanFinished{hash, height, blkTime}
 }
 

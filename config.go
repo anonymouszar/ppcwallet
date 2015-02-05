@@ -24,15 +24,15 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/btcsuite/go-flags"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/wire"
-	"github.com/btcsuite/go-flags"
 )
 
 const (
 	defaultCAFilename       = "ppcd.cert"
 	defaultConfigFilename   = "ppcwallet.conf"
-	defaultBtcNet           = btcwire.MainNet
+	defaultBtcNet           = wire.MainNet
 	defaultLogLevel         = "info"
 	defaultLogDirname       = "logs"
 	defaultLogFilename      = "ppcwallet.log"
@@ -268,8 +268,8 @@ func loadConfig() (*config, []string, error) {
 
 	// Show the version and exit if the version flag was specified.
 	funcName := "loadConfig"
-		appName := filepath.Base(os.Args[0])
-		appName = strings.TrimSuffix(appName, filepath.Ext(appName))
+	appName := filepath.Base(os.Args[0])
+	appName = strings.TrimSuffix(appName, filepath.Ext(appName))
 	usageMessage := fmt.Sprintf("Use %s -h to show usage", appName)
 	if preCfg.ShowVersion {
 		fmt.Println(appName, "version", version())
@@ -387,20 +387,20 @@ func loadConfig() (*config, []string, error) {
 			return nil, nil, err
 		}
 	} else {
-	// If CAFile is unset, choose either the copy or local btcd cert.
-	if cfg.CAFile == "" {
-		cfg.CAFile = filepath.Join(cfg.DataDir, defaultCAFilename)
+		// If CAFile is unset, choose either the copy or local btcd cert.
+		if cfg.CAFile == "" {
+			cfg.CAFile = filepath.Join(cfg.DataDir, defaultCAFilename)
 
-		// If the CA copy does not exist, check if we're connecting to
-		// a local btcd and switch to its RPC cert if it exists.
-		if !fileExists(cfg.CAFile) {
+			// If the CA copy does not exist, check if we're connecting to
+			// a local btcd and switch to its RPC cert if it exists.
+			if !fileExists(cfg.CAFile) {
 				if _, ok := localhostListeners[RPCHost]; ok {
-				if fileExists(btcdHomedirCAFile) {
-					cfg.CAFile = btcdHomedirCAFile
+					if fileExists(btcdHomedirCAFile) {
+						cfg.CAFile = btcdHomedirCAFile
+					}
 				}
 			}
 		}
-	}
 	}
 
 	if len(cfg.SvrListeners) == 0 {

@@ -111,6 +111,6 @@ out:
 // type for more details.
 func newMinter(w *Wallet) *Minter {
 	return &Minter{
-		wallet:            w,
+		wallet: w,
 	}
 }

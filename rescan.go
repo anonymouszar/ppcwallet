@@ -18,9 +18,9 @@ package main
 
 import (
 	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/chain"
 	"github.com/ppcsuite/ppcwallet/keystore"
-	"github.com/ppcsuite/ppcd/wire"
 )
 
 // RescanProgressMsg reports the current progress made by a rescan for a
@@ -46,7 +46,7 @@ type RescanFinishedMsg struct {
 type RescanJob struct {
 	InitialSync bool
 	Addrs       []btcutil.Address
-	OutPoints   []*btcwire.OutPoint
+	OutPoints   []*wire.OutPoint
 	BlockStamp  keystore.BlockStamp
 	err         chan error
 }
@@ -56,7 +56,7 @@ type RescanJob struct {
 type rescanBatch struct {
 	initialSync bool
 	addrs       []btcutil.Address
-	outpoints   []*btcwire.OutPoint
+	outpoints   []*wire.OutPoint
 	bs          keystore.BlockStamp
 	errChans    []chan error
 }
@@ -301,7 +301,7 @@ func (w *Wallet) RescanActiveAddresses() (err error) {
 	if err != nil {
 		return
 	}
-	outpoints := make([]*btcwire.OutPoint, len(unspents))
+	outpoints := make([]*wire.OutPoint, len(unspents))
 	for i, output := range unspents {
 		outpoints[i] = output.OutPoint()
 	}

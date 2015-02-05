@@ -38,7 +38,7 @@ var tstNetParams = &btcnet.MainNetParams
 
 func makeBS(height int32) *BlockStamp {
 	return &BlockStamp{
-		Hash:   new(btcwire.ShaHash),
+		Hash:   new(wire.ShaHash),
 		Height: height,
 	}
 }

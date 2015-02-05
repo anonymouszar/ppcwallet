@@ -11,8 +11,8 @@ import (
 	"github.com/kac-/umint"
 	"github.com/ppcsuite/btcjson"
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/btcws"
+	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcutil"
 	"github.com/ppcsuite/ppcwallet/chain"
 	"github.com/ppcsuite/ppcwallet/txstore"
@@ -42,7 +42,7 @@ func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
 		return
 	}
 
-	txNew := btcwire.NewMsgTx()
+	txNew := wire.NewMsgTx()
 
 	nBalance, err := w.CalculateBalance(6)
 

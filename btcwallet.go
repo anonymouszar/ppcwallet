@@ -93,12 +93,12 @@ func walletMain() error {
 		var certs []byte
 		if !cfg.DisableClientTLS {
 			certs, err = ioutil.ReadFile(cfg.CAFile)
-		if err != nil {
-			log.Warnf("Cannot open CA file: %v", err)
-			// If there's an error reading the CA file, continue
-			// with nil certs and without the client connection
-			certs = nil
-		}
+			if err != nil {
+				log.Warnf("Cannot open CA file: %v", err)
+				// If there's an error reading the CA file, continue
+				// with nil certs and without the client connection
+				certs = nil
+			}
 		} else {
 			log.Info("Client TLS is disabled")
 		}
