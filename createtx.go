@@ -27,7 +27,7 @@ import (
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcwallet/keystore"
 	"github.com/ppcsuite/ppcwallet/txstore"
-	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/wire"
 )
 
 const (

@@ -23,7 +23,7 @@ import (
 	"time"
 
 	"github.com/ppcsuite/ppcwallet/walletdb"
-	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/wire"
 	"github.com/btcsuite/fastsha256"
 )
 

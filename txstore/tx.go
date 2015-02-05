@@ -26,7 +26,7 @@ import (
 
 	"github.com/ppcsuite/btcnet"
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcd/txscript"
 )
 

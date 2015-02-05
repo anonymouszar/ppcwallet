@@ -28,7 +28,7 @@ import (
 	"github.com/ppcsuite/btcutil/hdkeychain"
 	"github.com/ppcsuite/ppcwallet/snacl"
 	"github.com/ppcsuite/ppcwallet/walletdb"
-	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/wire"
 )
 
 const (

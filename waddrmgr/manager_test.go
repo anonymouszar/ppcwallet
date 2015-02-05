@@ -27,7 +27,7 @@ import (
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/walletdb"
-	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/wire"
 )
 
 // newShaHash converts the passed big-endian hex string into a btcwire.ShaHash.

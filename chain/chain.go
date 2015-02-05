@@ -24,7 +24,7 @@ import (
 	"github.com/ppcsuite/btcnet"
 	"github.com/ppcsuite/btcrpcclient"
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/btcws"
 	"github.com/ppcsuite/ppcwallet/keystore"
 	"github.com/ppcsuite/ppcwallet/txstore"

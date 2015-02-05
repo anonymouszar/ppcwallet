@@ -23,7 +23,7 @@ import (
 	"github.com/ppcsuite/btcnet"
 	"github.com/ppcsuite/btcutil"
 	. "github.com/ppcsuite/ppcwallet/txstore"
-	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/wire"
 )
 
 // Received transaction output for mainnet outpoint

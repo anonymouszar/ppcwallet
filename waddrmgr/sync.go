@@ -20,7 +20,7 @@ import (
 	"sync"
 
 	"github.com/ppcsuite/ppcwallet/walletdb"
-	"github.com/ppcsuite/btcwire"
+	"github.com/ppcsuite/ppcd/wire"
 )
 
 const (
