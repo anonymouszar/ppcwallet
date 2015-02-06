@@ -27,8 +27,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/btcutil/hdkeychain"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcwallet/votingpool"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/walletdb"

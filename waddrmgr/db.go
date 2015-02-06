@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ppcsuite/ppcwallet/walletdb"
-	"github.com/ppcsuite/ppcd/wire"
 	"github.com/btcsuite/fastsha256"
+	"github.com/ppcsuite/ppcd/wire"
+	"github.com/ppcsuite/ppcwallet/walletdb"
 )
 
 const (

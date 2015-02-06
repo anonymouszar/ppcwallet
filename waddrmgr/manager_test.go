@@ -23,11 +23,11 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/ppcd/chaincfg"
+	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/walletdb"
-	"github.com/ppcsuite/ppcd/wire"
 )
 
 // newShaHash converts the passed big-endian hex string into a wire.ShaHash.

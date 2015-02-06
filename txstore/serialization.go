@@ -28,8 +28,8 @@ import (
 	"time"
 
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/ppcwallet/rename"
 	"github.com/ppcsuite/ppcd/wire"
+	"github.com/ppcsuite/ppcwallet/rename"
 )
 
 // filename is the name of the file typically used to save a transaction

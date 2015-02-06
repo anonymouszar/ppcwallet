@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/btcutil"
-	. "github.com/ppcsuite/ppcwallet/txstore"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/wire"
+	. "github.com/ppcsuite/ppcwallet/txstore"
 )
 
 // Received transaction output for mainnet outpoint

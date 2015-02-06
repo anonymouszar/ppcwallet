@@ -19,8 +19,8 @@ package waddrmgr
 import (
 	"sync"
 
-	"github.com/ppcsuite/ppcwallet/walletdb"
 	"github.com/ppcsuite/ppcd/wire"
+	"github.com/ppcsuite/ppcwallet/walletdb"
 )
 
 const (

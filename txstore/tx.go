@@ -24,10 +24,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/ppcd/wire"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/txscript"
+	"github.com/ppcsuite/ppcd/wire"
 )
 
 var (
@@ -127,9 +127,9 @@ type TxRecord struct {
 
 // Block holds details about a block that contains wallet transactions.
 type Block struct {
-	Hash   wire.ShaHash
-	Time   time.Time
-	Height int32
+	Hash                wire.ShaHash
+	Time                time.Time
+	Height              int32
 	KernelStakeModifier uint64
 }
 
