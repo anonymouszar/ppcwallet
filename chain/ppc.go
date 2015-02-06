@@ -11,7 +11,7 @@ import (
 )
 
 func (c *Client) Params() (*chaincfg.Params, error) {
-	return c.netParams, nil
+	return c.chainParams, nil
 }
 
 func (c *Client) CurrentTarget() (uint32, error) {

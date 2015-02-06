@@ -141,7 +141,7 @@ type FoundStake struct {
 
 func (w *Wallet) findStake(maxTime int64, diff float64) (foundStakes []FoundStake, err error) {
 
-	// Get NetParams
+	// Get ChainParams
 	params, err := w.chainSvr.Params()
 	if err != nil {
 		return

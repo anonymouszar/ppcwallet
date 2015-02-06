@@ -113,7 +113,7 @@ const (
 	CreditImmature
 )
 
-// category returns the category of the credit.  The passed block chain height is
+// Category returns the category of the credit.  The passed block chain height is
 // used to distinguish immature from mature coinbase outputs.
 func (c *Credit) Category(chainHeight int32,
 	net *chaincfg.Params) CreditCategory {

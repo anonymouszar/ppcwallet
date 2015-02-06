@@ -44,7 +44,7 @@ const (
 	// the underlying hierarchical deterministic key derivation.
 	MaxAddressesPerAccount = hdkeychain.HardenedKeyStart - 1
 
-	// importedAddrAccount is the account number to use for all imported
+	// ImportedAddrAccount is the account number to use for all imported
 	// addresses.  This is useful since normal accounts are derived from the
 	// root hierarchical deterministic key and imported addresses do not
 	// fit into that model.
@@ -210,7 +210,7 @@ type Manager struct {
 	mtx sync.RWMutex
 
 	namespace    walletdb.Namespace
-	net          *chaincfg.Params
+	chainParams  *chaincfg.Params
 	addrs        map[addrKey]ManagedAddress
 	syncState    syncState
 	watchingOnly bool
@@ -935,9 +935,10 @@ func (m *Manager) existsAddress(addressID []byte) (bool, error) {
 func (m *Manager) ImportPrivateKey(wif *btcutil.WIF, bs *BlockStamp) (ManagedPubKeyAddress, error) {
 	// Ensure the address is intended for network the address manager is
 	// associated with.
-	if !wif.IsForNet(m.net) {
+	if !wif.IsForNet(m.chainParams) {
 		str := fmt.Sprintf("private key is not for the same network the "+
-			"address manager is configured for (%s)", m.net.Name)
+			"address manager is configured for (%s)",
+			m.chainParams.Name)
 		return nil, managerError(ErrWrongNet, str, nil)
 	}
 
@@ -1288,12 +1289,12 @@ func (m *Manager) Unlock(passphrase []byte) error {
 	return nil
 }
 
-// Net returns the network parameters for this address manager.
-func (m *Manager) Net() *chaincfg.Params {
+// ChainParams returns the chain parameters for this address manager.
+func (m *Manager) ChainParams() *chaincfg.Params {
 	// NOTE: No need for mutex here since the net field does not change
 	// after the manager instance is created.
 
-	return m.net
+	return m.chainParams
 }
 
 // nextAddresses returns the specified number of next chained address from the
@@ -1364,7 +1365,7 @@ func (m *Manager) nextAddresses(account uint32, numAddresses uint32, internal bo
 					nextIndex)
 				return nil, managerError(ErrKeyChain, str, err)
 			}
-			key.SetNet(m.net)
+			key.SetNet(m.chainParams)
 
 			nextIndex++
 			nextKey = key
@@ -1625,7 +1626,7 @@ func (m *Manager) Decrypt(keyType CryptoKeyType, in []byte) ([]byte, error) {
 }
 
 // newManager returns a new locked address manager with the given parameters.
-func newManager(namespace walletdb.Namespace, net *chaincfg.Params,
+func newManager(namespace walletdb.Namespace, chainParams *chaincfg.Params,
 	masterKeyPub *snacl.SecretKey, masterKeyPriv *snacl.SecretKey,
 	cryptoKeyPub EncryptorDecryptor, cryptoKeyPrivEncrypted,
 	cryptoKeyScriptEncrypted []byte, syncInfo *syncState,
@@ -1633,7 +1634,7 @@ func newManager(namespace walletdb.Namespace, net *chaincfg.Params,
 
 	return &Manager{
 		namespace:                namespace,
-		net:                      net,
+		chainParams:              chainParams,
 		addrs:                    make(map[addrKey]ManagedAddress),
 		syncState:                *syncInfo,
 		locked:                   true,
@@ -1717,7 +1718,7 @@ func checkBranchKeys(acctKey *hdkeychain.ExtendedKey) error {
 // loadManager returns a new address manager that results from loading it from
 // the passed opened database.  The public passphrase is required to decrypt the
 // public keys.
-func loadManager(namespace walletdb.Namespace, pubPassphrase []byte, net *chaincfg.Params, config *Options) (*Manager, error) {
+func loadManager(namespace walletdb.Namespace, pubPassphrase []byte, chainParams *chaincfg.Params, config *Options) (*Manager, error) {
 	// Perform all database lookups in a read-only view.
 	var watchingOnly bool
 	var masterKeyPubParams, masterKeyPrivParams []byte
@@ -1809,9 +1810,7 @@ func loadManager(namespace walletdb.Namespace, pubPassphrase []byte, net *chainc
 	}
 	// the defaults for the additional fields which are not specified in the
 	// call to new with the values loaded from the database.
-	// the defaults for the additional fields which are not specified in the
-	// call to new with the values loaded from the database.
-	mgr := newManager(namespace, net, &masterKeyPub, &masterKeyPriv,
+	mgr := newManager(namespace, chainParams, &masterKeyPub, &masterKeyPriv,
 		cryptoKeyPub, cryptoKeyPrivEnc, cryptoKeyScriptEnc, syncInfo,
 		config, privPassphraseSalt)
 	mgr.watchingOnly = watchingOnly
@@ -1828,7 +1827,7 @@ func loadManager(namespace walletdb.Namespace, pubPassphrase []byte, net *chainc
 //
 // A ManagerError with an error code of ErrNoExist will be returned if the
 // passed manager does not exist in the specified namespace.
-func Open(namespace walletdb.Namespace, pubPassphrase []byte, net *chaincfg.Params, config *Options) (*Manager, error) {
+func Open(namespace walletdb.Namespace, pubPassphrase []byte, chainParams *chaincfg.Params, config *Options) (*Manager, error) {
 	// Return an error if the manager has NOT already been created in the
 	// given database namespace.
 	exists, err := managerExists(namespace)
@@ -1850,7 +1849,7 @@ func Open(namespace walletdb.Namespace, pubPassphrase []byte, net *chaincfg.Para
 		config = defaultConfig
 	}
 
-	return loadManager(namespace, pubPassphrase, net, config)
+	return loadManager(namespace, pubPassphrase, chainParams, config)
 }
 
 // Create returns a new locked address manager in the given namespace.  The
@@ -1870,7 +1869,7 @@ func Open(namespace walletdb.Namespace, pubPassphrase []byte, net *chaincfg.Para
 //
 // A ManagerError with an error code of ErrAlreadyExists will be returned the
 // address manager already exists in the specified namespace.
-func Create(namespace walletdb.Namespace, seed, pubPassphrase, privPassphrase []byte, net *chaincfg.Params, config *Options) (*Manager, error) {
+func Create(namespace walletdb.Namespace, seed, pubPassphrase, privPassphrase []byte, chainParams *chaincfg.Params, config *Options) (*Manager, error) {
 	// Return an error if the manager has already been created in the given
 	// database namespace.
 	exists, err := managerExists(namespace)
@@ -1902,7 +1901,7 @@ func Create(namespace walletdb.Namespace, seed, pubPassphrase, privPassphrase []
 	}
 
 	// Derive the account key for the first account according to BIP0044.
-	acctKeyPriv, err := deriveAccountKey(root, net.HDCoinType, 0)
+	acctKeyPriv, err := deriveAccountKey(root, chainParams.HDCoinType, 0)
 	if err != nil {
 		// The seed is unusable if the any of the children in the
 		// required hierarchy can't be derived due to invalid child.
@@ -2007,9 +2006,9 @@ func Create(namespace walletdb.Namespace, seed, pubPassphrase, privPassphrase []
 		return nil, managerError(ErrCrypto, str, err)
 	}
 
-	// Use the genesis block for the passed network as the created at block
-	// for the defaut.
-	createdAt := &BlockStamp{Hash: *net.GenesisHash, Height: 0}
+	// Use the genesis block for the passed chain as the created at block
+	// for the default.
+	createdAt := &BlockStamp{Hash: *chainParams.GenesisHash, Height: 0}
 
 	// Create the initial sync state.
 	recentHashes := []wire.ShaHash{createdAt.Hash}
@@ -2074,7 +2073,7 @@ func Create(namespace walletdb.Namespace, seed, pubPassphrase, privPassphrase []
 	masterKeyPriv.Zero()
 	cryptoKeyPriv.Zero()
 	cryptoKeyScript.Zero()
-	return newManager(namespace, net, masterKeyPub, masterKeyPriv,
+	return newManager(namespace, chainParams, masterKeyPub, masterKeyPriv,
 		cryptoKeyPub, cryptoKeyPrivEnc, cryptoKeyScriptEnc, syncInfo,
 		config, privPassphraseSalt), nil
 }

@@ -391,10 +391,11 @@ func testExternalAddresses(tc *testContext) bool {
 
 		// Now, use the Address API to retrieve each of the expected new
 		// addresses and ensure they're accurate.
-		net := tc.manager.Net()
+		chainParams := tc.manager.ChainParams()
 		for i := 0; i < len(expectedAddrs); i++ {
 			pkHash := expectedAddrs[i].addressHash
-			utilAddr, err := btcutil.NewAddressPubKeyHash(pkHash, net)
+			utilAddr, err := btcutil.NewAddressPubKeyHash(pkHash,
+				chainParams)
 			if err != nil {
 				tc.t.Errorf("%s NewAddressPubKeyHash #%d: "+
 					"unexpected error: %v", prefix, i, err)
@@ -571,10 +572,11 @@ func testInternalAddresses(tc *testContext) bool {
 
 		// Now, use the Address API to retrieve each of the expected new
 		// addresses and ensure they're accurate.
-		net := tc.manager.Net()
+		chainParams := tc.manager.ChainParams()
 		for i := 0; i < len(expectedAddrs); i++ {
 			pkHash := expectedAddrs[i].addressHash
-			utilAddr, err := btcutil.NewAddressPubKeyHash(pkHash, net)
+			utilAddr, err := btcutil.NewAddressPubKeyHash(pkHash,
+				chainParams)
 			if err != nil {
 				tc.t.Errorf("%s NewAddressPubKeyHash #%d: "+
 					"unexpected error: %v", prefix, i, err)
@@ -794,7 +796,7 @@ func testImportPrivateKey(tc *testContext) bool {
 
 	// Setup a closure to test the results since the same tests need to be
 	// repeated with the manager unlocked and locked.
-	net := tc.manager.Net()
+	chainParams := tc.manager.ChainParams()
 	testResults := func() bool {
 		failed := false
 		for i, test := range tests {
@@ -803,7 +805,7 @@ func testImportPrivateKey(tc *testContext) bool {
 			// Use the Address API to retrieve each of the expected
 			// new addresses and ensure they're accurate.
 			utilAddr, err := btcutil.NewAddressPubKeyHash(
-				test.expected.addressHash, net)
+				test.expected.addressHash, chainParams)
 			if err != nil {
 				tc.t.Errorf("%s NewAddressPubKeyHash #%d (%s): "+
 					"unexpected error: %v", prefix, i,
@@ -947,7 +949,7 @@ func testImportScript(tc *testContext) bool {
 
 	// Setup a closure to test the results since the same tests need to be
 	// repeated with the manager unlocked and locked.
-	net := tc.manager.Net()
+	chainParams := tc.manager.ChainParams()
 	testResults := func() bool {
 		failed := false
 		for i, test := range tests {
@@ -955,7 +957,8 @@ func testImportScript(tc *testContext) bool {
 
 			// Use the Address API to retrieve each of the expected
 			// new addresses and ensure they're accurate.
-			utilAddr, err := btcutil.NewAddressScriptHash(test.in, net)
+			utilAddr, err := btcutil.NewAddressScriptHash(test.in,
+				chainParams)
 			if err != nil {
 				tc.t.Errorf("%s NewAddressScriptHash #%d (%s): "+
 					"unexpected error: %v", prefix, i,
