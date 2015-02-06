@@ -22,7 +22,7 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/btcsuite/btcec"
+	"github.com/ppcsuite/ppcd/btcec"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/btcutil/hdkeychain"
 )

@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/btcsuite/btcec"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/btcutil/hdkeychain"
+	"github.com/ppcsuite/ppcd/btcec"
 	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/snacl"
