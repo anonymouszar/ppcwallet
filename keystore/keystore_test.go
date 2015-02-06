@@ -24,7 +24,7 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcec"
-	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcd/txscript"
@@ -34,7 +34,7 @@ import (
 
 const dummyDir = ""
 
-var tstNetParams = &btcnet.MainNetParams
+var tstNetParams = &chaincfg.MainNetParams
 
 func makeBS(height int32) *BlockStamp {
 	return &BlockStamp{

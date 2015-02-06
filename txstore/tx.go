@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcd/txscript"
@@ -1233,7 +1233,7 @@ func confirms(txHeight, curHeight int32) int32 {
 // at a current chain height of curHeight.  Coinbase outputs are only included
 // in the balance if maturity has been reached.
 func (s *Store) Balance(minConf int, chainHeight int32,
-	net *btcnet.Params) (btcutil.Amount, error) {
+	net *chaincfg.Params) (btcutil.Amount, error) {
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
 
@@ -1241,7 +1241,7 @@ func (s *Store) Balance(minConf int, chainHeight int32,
 }
 
 func (s *Store) balance(minConf int, chainHeight int32,
-	net *btcnet.Params) (btcutil.Amount, error) {
+	net *chaincfg.Params) (btcutil.Amount, error) {
 	var bal btcutil.Amount
 
 	// Shadow these functions to avoid repeating arguments unnecesarily.
@@ -1424,7 +1424,7 @@ func (d Debits) Fee() btcutil.Amount {
 
 // Addresses parses the pubkey script, extracting all addresses for a
 // standard script.
-func (c Credit) Addresses(net *btcnet.Params) (txscript.ScriptClass,
+func (c Credit) Addresses(net *chaincfg.Params) (txscript.ScriptClass,
 	[]btcutil.Address, int, error) {
 
 	c.s.mtx.RLock()

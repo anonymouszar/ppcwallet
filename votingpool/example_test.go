@@ -22,7 +22,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcwallet/votingpool"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/walletdb"
@@ -57,7 +57,7 @@ func Example_basic() {
 
 	// Create the address manager
 	mgr, err := waddrmgr.Create(mgrNamespace, seed, pubPassphrase, privPassphrase,
-		&btcnet.MainNetParams, nil)
+		&chaincfg.MainNetParams, nil)
 	if err != nil {
 		fmt.Printf("Failed to create addr manager: %v\n", err)
 		return

@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/btcrpcclient"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/wire"
@@ -32,7 +32,7 @@ import (
 
 type Client struct {
 	*btcrpcclient.Client
-	netParams *btcnet.Params
+	netParams *chaincfg.Params
 
 	enqueueNotification chan interface{}
 	dequeueNotification chan interface{}
@@ -53,7 +53,7 @@ type Client struct {
 	quitMtx sync.Mutex
 }
 
-func NewClient(net *btcnet.Params, connect, user, pass string, certs []byte, disableTLS bool) (*Client, error) {
+func NewClient(net *chaincfg.Params, connect, user, pass string, certs []byte, disableTLS bool) (*Client, error) {
 	client := Client{
 		netParams:           net,
 		enqueueNotification: make(chan interface{}),

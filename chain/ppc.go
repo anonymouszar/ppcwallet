@@ -7,10 +7,10 @@ package chain
 import (
 	"errors"
 
-	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/ppcd/chaincfg"
 )
 
-func (c *Client) Params() (*btcnet.Params, error) {
+func (c *Client) Params() (*chaincfg.Params, error) {
 	return c.netParams, nil
 }
 

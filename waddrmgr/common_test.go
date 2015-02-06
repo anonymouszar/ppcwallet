@@ -23,7 +23,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/walletdb"
 	_ "github.com/ppcsuite/ppcwallet/walletdb/bdb"
@@ -131,7 +131,7 @@ func setupManager(t *testing.T) (tearDownFunc func(), mgr *waddrmgr.Manager) {
 		t.Fatalf("createDbNamespace: unexpected error: %v", err)
 	}
 	mgr, err = waddrmgr.Create(namespace, seed, pubPassphrase,
-		privPassphrase, &btcnet.MainNetParams, fastScrypt)
+		privPassphrase, &chaincfg.MainNetParams, fastScrypt)
 	if err != nil {
 		db.Close()
 		_ = os.RemoveAll(dirName)

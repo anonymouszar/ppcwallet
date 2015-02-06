@@ -23,7 +23,7 @@ import (
 	"sync"
 
 	"github.com/btcsuite/btcec"
-	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/btcutil/hdkeychain"
 	"github.com/ppcsuite/ppcwallet/snacl"
@@ -210,7 +210,7 @@ type Manager struct {
 	mtx sync.RWMutex
 
 	namespace    walletdb.Namespace
-	net          *btcnet.Params
+	net          *chaincfg.Params
 	addrs        map[addrKey]ManagedAddress
 	syncState    syncState
 	watchingOnly bool
@@ -1289,7 +1289,7 @@ func (m *Manager) Unlock(passphrase []byte) error {
 }
 
 // Net returns the network parameters for this address manager.
-func (m *Manager) Net() *btcnet.Params {
+func (m *Manager) Net() *chaincfg.Params {
 	// NOTE: No need for mutex here since the net field does not change
 	// after the manager instance is created.
 
@@ -1625,7 +1625,7 @@ func (m *Manager) Decrypt(keyType CryptoKeyType, in []byte) ([]byte, error) {
 }
 
 // newManager returns a new locked address manager with the given parameters.
-func newManager(namespace walletdb.Namespace, net *btcnet.Params,
+func newManager(namespace walletdb.Namespace, net *chaincfg.Params,
 	masterKeyPub *snacl.SecretKey, masterKeyPriv *snacl.SecretKey,
 	cryptoKeyPub EncryptorDecryptor, cryptoKeyPrivEncrypted,
 	cryptoKeyScriptEncrypted []byte, syncInfo *syncState,
@@ -1717,7 +1717,7 @@ func checkBranchKeys(acctKey *hdkeychain.ExtendedKey) error {
 // loadManager returns a new address manager that results from loading it from
 // the passed opened database.  The public passphrase is required to decrypt the
 // public keys.
-func loadManager(namespace walletdb.Namespace, pubPassphrase []byte, net *btcnet.Params, config *Options) (*Manager, error) {
+func loadManager(namespace walletdb.Namespace, pubPassphrase []byte, net *chaincfg.Params, config *Options) (*Manager, error) {
 	// Perform all database lookups in a read-only view.
 	var watchingOnly bool
 	var masterKeyPubParams, masterKeyPrivParams []byte
@@ -1828,7 +1828,7 @@ func loadManager(namespace walletdb.Namespace, pubPassphrase []byte, net *btcnet
 //
 // A ManagerError with an error code of ErrNoExist will be returned if the
 // passed manager does not exist in the specified namespace.
-func Open(namespace walletdb.Namespace, pubPassphrase []byte, net *btcnet.Params, config *Options) (*Manager, error) {
+func Open(namespace walletdb.Namespace, pubPassphrase []byte, net *chaincfg.Params, config *Options) (*Manager, error) {
 	// Return an error if the manager has NOT already been created in the
 	// given database namespace.
 	exists, err := managerExists(namespace)
@@ -1870,7 +1870,7 @@ func Open(namespace walletdb.Namespace, pubPassphrase []byte, net *btcnet.Params
 //
 // A ManagerError with an error code of ErrAlreadyExists will be returned the
 // address manager already exists in the specified namespace.
-func Create(namespace walletdb.Namespace, seed, pubPassphrase, privPassphrase []byte, net *btcnet.Params, config *Options) (*Manager, error) {
+func Create(namespace walletdb.Namespace, seed, pubPassphrase, privPassphrase []byte, net *chaincfg.Params, config *Options) (*Manager, error) {
 	// Return an error if the manager has already been created in the given
 	// database namespace.
 	exists, err := managerExists(namespace)

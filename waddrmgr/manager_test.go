@@ -23,7 +23,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ppcsuite/btcnet"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/walletdb"
@@ -1160,7 +1160,7 @@ func testWatchingOnly(tc *testContext) bool {
 
 	// Open the manager using the namespace and convert it to watching-only.
 	mgr, err := waddrmgr.Open(namespace, pubPassphrase,
-		&btcnet.MainNetParams, fastScrypt)
+		&chaincfg.MainNetParams, fastScrypt)
 	if err != nil {
 		tc.t.Errorf("%v", err)
 		return false
@@ -1183,7 +1183,7 @@ func testWatchingOnly(tc *testContext) bool {
 	mgr.Close()
 
 	// Open the watching-only manager and run all the tests again.
-	mgr, err = waddrmgr.Open(namespace, pubPassphrase, &btcnet.MainNetParams,
+	mgr, err = waddrmgr.Open(namespace, pubPassphrase, &chaincfg.MainNetParams,
 		fastScrypt)
 	if err != nil {
 		tc.t.Errorf("Open Watching-Only: unexpected error: %v", err)
@@ -1330,7 +1330,7 @@ func testSync(tc *testContext) bool {
 			wantHeight := int32(i) - int32(j) + 1
 			var wantHash *wire.ShaHash
 			if wantHeight == 0 {
-				wantHash = btcnet.MainNetParams.GenesisHash
+				wantHash = chaincfg.MainNetParams.GenesisHash
 			} else {
 				wantHash = tests[wantHeight-1].hash
 			}
@@ -1437,7 +1437,7 @@ func testSync(tc *testContext) bool {
 	}
 	blockStamp = waddrmgr.BlockStamp{
 		Height: 0,
-		Hash:   *btcnet.MainNetParams.GenesisHash,
+		Hash:   *chaincfg.MainNetParams.GenesisHash,
 	}
 	gotBlockStamp = tc.manager.SyncedTo()
 	if gotBlockStamp != blockStamp {
@@ -1468,14 +1468,14 @@ func TestManager(t *testing.T) {
 	// Open manager that does not exist to ensure the expected error is
 	// returned.
 	_, err = waddrmgr.Open(mgrNamespace, pubPassphrase,
-		&btcnet.MainNetParams, fastScrypt)
+		&chaincfg.MainNetParams, fastScrypt)
 	if !checkManagerError(t, "Open non-existant", err, waddrmgr.ErrNoExist) {
 		return
 	}
 
 	// Create a new manager.
 	mgr, err := waddrmgr.Create(mgrNamespace, seed, pubPassphrase,
-		privPassphrase, &btcnet.MainNetParams, fastScrypt)
+		privPassphrase, &chaincfg.MainNetParams, fastScrypt)
 	if err != nil {
 		t.Errorf("Create: unexpected error: %v", err)
 		return
@@ -1487,7 +1487,7 @@ func TestManager(t *testing.T) {
 	// Attempt to create the manager again to ensure the expected error is
 	// returned.
 	_, err = waddrmgr.Create(mgrNamespace, seed, pubPassphrase,
-		privPassphrase, &btcnet.MainNetParams, fastScrypt)
+		privPassphrase, &chaincfg.MainNetParams, fastScrypt)
 	if !checkManagerError(t, "Create existing", err, waddrmgr.ErrAlreadyExists) {
 		mgr.Close()
 		return
@@ -1508,7 +1508,7 @@ func TestManager(t *testing.T) {
 	// Open the manager and run all the tests again in open mode which
 	// avoids reinserting new addresses like the create mode tests do.
 	mgr, err = waddrmgr.Open(mgrNamespace, pubPassphrase,
-		&btcnet.MainNetParams, fastScrypt)
+		&chaincfg.MainNetParams, fastScrypt)
 	if err != nil {
 		t.Errorf("Open: unexpected error: %v", err)
 		return

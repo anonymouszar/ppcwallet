@@ -27,8 +27,8 @@ import (
 	"time"
 
 	"github.com/ppcsuite/btcjson"
-	"github.com/ppcsuite/btcnet"
 	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/chain"
 	"github.com/ppcsuite/ppcwallet/keystore"
@@ -45,11 +45,11 @@ var (
 
 // networkDir returns the directory name of a network directory to hold wallet
 // files.
-func networkDir(net *btcnet.Params) string {
+func networkDir(net *chaincfg.Params) string {
 	netname := net.Name
 
 	// For now, we must always name the testnet data directory as "testnet"
-	// and not "testnet3" or any other version, as the btcnet testnet3
+	// and not "testnet3" or any other version, as the chaincfg testnet3
 	// paramaters will likely be switched to being named "testnet3" in the
 	// future.  This is done to future proof that change, and an upgrade
 	// plan to move the testnet3 data directory can be worked out later.
