@@ -23,7 +23,7 @@ import (
 
 	"github.com/ppcsuite/btcrpcclient"
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/btcws"
+	"github.com/ppcsuite/ppcd/btcjson/btcws"
 	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/keystore"

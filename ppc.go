@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/kac-/umint"
-	"github.com/ppcsuite/btcjson"
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/btcws"
+	"github.com/ppcsuite/ppcd/btcjson"
+	"github.com/ppcsuite/ppcd/btcjson/btcws"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcutil"
 	"github.com/ppcsuite/ppcwallet/chain"
