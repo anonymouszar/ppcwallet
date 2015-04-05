@@ -6,11 +6,12 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
-
-	"golang.org/x/crypto/nacl/secretbox"
-	"golang.org/x/crypto/scrypt"
+	"runtime/debug"
 
 	"github.com/btcsuite/fastsha256"
+	"github.com/btcsuite/golangcrypto/nacl/secretbox"
+	"github.com/btcsuite/golangcrypto/scrypt"
+	"github.com/ppcsuite/ppcwallet/internal/zero"
 )
 
 var (
@@ -22,13 +23,6 @@ var (
 	ErrMalformed       = errors.New("malformed data")
 	ErrDecryptFailed   = errors.New("unable to decrypt")
 )
-
-// Zero out a byte slice.
-func zero(b []byte) {
-	for i := range b {
-		b[i] ^= b[i]
-	}
-}
 
 const (
 	// Expose secretbox's Overhead const here for convenience.
@@ -79,7 +73,7 @@ func (ck *CryptoKey) Decrypt(in []byte) ([]byte, error) {
 // rather than waiting until it's reclaimed by the garbage collector.  The
 // key is no longer usable after this call.
 func (ck *CryptoKey) Zero() {
-	zero(ck[:])
+	zero.Bytea32((*[KeySize]byte)(ck))
 }
 
 // GenerateCryptoKey generates a new crypotgraphically random key.
@@ -120,7 +114,15 @@ func (sk *SecretKey) deriveKey(password *[]byte) error {
 		return err
 	}
 	copy(sk.Key[:], key)
-	zero(key)
+	zero.Bytes(key)
+
+	// I'm not a fan of forced garbage collections, but scrypt allocates a
+	// ton of memory and calling it back to back without a GC cycle in
+	// between means you end up needing twice the amount of memory.  For
+	// example, if your scrypt parameters are such that you require 1GB and
+	// you call it twice in a row, without this you end up allocating 2GB
+	// since the first GB probably hasn't been released yet.
+	debug.FreeOSMemory()
 
 	return nil
 }

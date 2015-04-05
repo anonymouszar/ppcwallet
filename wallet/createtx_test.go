@@ -1,7 +1,9 @@
-package main
+package wallet
 
 import (
 	"encoding/hex"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"testing"
@@ -9,8 +11,10 @@ import (
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"
-	"github.com/ppcsuite/ppcwallet/keystore"
 	"github.com/ppcsuite/ppcwallet/txstore"
+	"github.com/ppcsuite/ppcwallet/waddrmgr"
+	"github.com/ppcsuite/ppcwallet/walletdb"
+	_ "github.com/ppcsuite/ppcwallet/walletdb/bdb"
 )
 
 // This is a tx that transfers funds (0.371 BTC) to addresses of known privKeys.
@@ -40,10 +44,18 @@ var (
 	outAddr2 = "P9xAMCLegAdSzUnW21f4LJyMgAYn7kRCDm"
 )
 
+// fastScrypt are options to passed to the wallet address manager to speed up
+// the scrypt derivations.
+var fastScrypt = &waddrmgr.Options{
+	ScryptN: 16,
+	ScryptR: 8,
+	ScryptP: 1,
+}
+
 func Test_addOutputs(t *testing.T) {
 	msgtx := wire.NewMsgTx()
 	pairs := map[string]btcutil.Amount{outAddr1: 10, outAddr2: 1}
-	if _, err := addOutputs(msgtx, pairs); err != nil {
+	if _, err := addOutputs(msgtx, pairs, &chaincfg.TestNet3Params); err != nil {
 		t.Fatal(err)
 	}
 	if len(msgtx.TxOut) != 2 {
@@ -57,11 +69,11 @@ func Test_addOutputs(t *testing.T) {
 }
 
 func TestCreateTx(t *testing.T) {
-	cfg = &config{DisallowFree: false}
-	bs := &keystore.BlockStamp{Height: 11111}
-	keys := newKeyStore(t, txInfo.privKeys, bs)
-	changeAddr, _ := btcutil.DecodeAddress("muqW4gcixv58tVbSKRC5q6CRKy8RmyLgZ5", activeNet.Params)
-	var tstChangeAddress = func(bs *keystore.BlockStamp) (btcutil.Address, error) {
+	bs := &waddrmgr.BlockStamp{Height: 11111}
+	mgr := newManager(t, txInfo.privKeys, bs)
+	account := uint32(0)
+	changeAddr, _ := btcutil.DecodeAddress("muqW4gcixv58tVbSKRC5q6CRKy8RmyLgZ5", &chaincfg.TestNet3Params)
+	var tstChangeAddress = func(account uint32) (btcutil.Address, error) {
 		return changeAddr, nil
 	}
 
@@ -69,17 +81,17 @@ func TestCreateTx(t *testing.T) {
 	eligible := eligibleInputsFromTx(t, txInfo.hex, []uint32{1, 2, 3, 4, 5})
 	// Now create a new TX sending 25e6 satoshis to the following addresses:
 	outputs := map[string]btcutil.Amount{outAddr1: 15e6, outAddr2: 10e6}
-	tx, err := createTx(eligible, outputs, bs, defaultFeeIncrement, keys, tstChangeAddress)
+	tx, err := createTx(eligible, outputs, bs, defaultFeeIncrement, mgr, account, tstChangeAddress, &chaincfg.TestNet3Params, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if tx.changeAddr.String() != changeAddr.String() {
+	if tx.ChangeAddr.String() != changeAddr.String() {
 		t.Fatalf("Unexpected change address; got %v, want %v",
-			tx.changeAddr.String(), changeAddr.String())
+			tx.ChangeAddr.String(), changeAddr.String())
 	}
 
-	msgTx := tx.tx.MsgTx()
+	msgTx := tx.Tx.MsgTx()
 	if len(msgTx.TxOut) != 3 {
 		t.Fatalf("Unexpected number of outputs; got %d, want 3", len(msgTx.TxOut))
 	}
@@ -107,16 +119,16 @@ func TestCreateTx(t *testing.T) {
 }
 
 func TestCreateTxInsufficientFundsError(t *testing.T) {
-	cfg = &config{DisallowFree: false}
 	outputs := map[string]btcutil.Amount{outAddr1: 10, outAddr2: 1e9}
 	eligible := eligibleInputsFromTx(t, txInfo.hex, []uint32{1})
-	bs := &keystore.BlockStamp{Height: 11111}
-	changeAddr, _ := btcutil.DecodeAddress("muqW4gcixv58tVbSKRC5q6CRKy8RmyLgZ5", activeNet.Params)
-	var tstChangeAddress = func(bs *keystore.BlockStamp) (btcutil.Address, error) {
+	bs := &waddrmgr.BlockStamp{Height: 11111}
+	account := uint32(0)
+	changeAddr, _ := btcutil.DecodeAddress("muqW4gcixv58tVbSKRC5q6CRKy8RmyLgZ5", &chaincfg.TestNet3Params)
+	var tstChangeAddress = func(account uint32) (btcutil.Address, error) {
 		return changeAddr, nil
 	}
 
-	_, err := createTx(eligible, outputs, bs, defaultFeeIncrement, nil, tstChangeAddress)
+	_, err := createTx(eligible, outputs, bs, defaultFeeIncrement, nil, account, tstChangeAddress, &chaincfg.TestNet3Params, false)
 
 	if err == nil {
 		t.Error("Expected InsufficientFundsError, got no error")
@@ -129,7 +141,7 @@ func TestCreateTxInsufficientFundsError(t *testing.T) {
 func checkOutputsMatch(t *testing.T, msgtx *wire.MsgTx, expected map[string]btcutil.Amount) {
 	// This is a bit convoluted because the index of the change output is randomized.
 	for addrStr, v := range expected {
-		addr, err := btcutil.DecodeAddress(addrStr, activeNet.Params)
+		addr, err := btcutil.DecodeAddress(addrStr, &chaincfg.TestNet3Params)
 		if err != nil {
 			t.Fatalf("Cannot decode address: %v", err)
 		}
@@ -150,28 +162,47 @@ func checkOutputsMatch(t *testing.T, msgtx *wire.MsgTx, expected map[string]btcu
 	}
 }
 
-// newKeyStore creates a new keystore and imports the given privKey into it.
-func newKeyStore(t *testing.T, privKeys []string, bs *keystore.BlockStamp) *keystore.Store {
-	passphrase := []byte{0, 1}
-	keys, err := keystore.New("/tmp/keys.bin", "Default acccount", passphrase,
-		activeNet.Params, bs)
+// newManager creates a new waddrmgr and imports the given privKey into it.
+func newManager(t *testing.T, privKeys []string, bs *waddrmgr.BlockStamp) *waddrmgr.Manager {
+	dbPath := filepath.Join(os.TempDir(), "wallet.bin")
+	os.Remove(dbPath)
+	db, err := walletdb.Create("bdb", dbPath)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	namespace, err := db.Namespace(waddrmgrNamespaceKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seed, err := hdkeychain.GenerateSeed(hdkeychain.RecommendedSeedLen)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	pubPassphrase := []byte("pub")
+	privPassphrase := []byte("priv")
+	mgr, err := waddrmgr.Create(namespace, seed, pubPassphrase,
+		privPassphrase, &chaincfg.TestNet3Params, fastScrypt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	for _, key := range privKeys {
 		wif, err := btcutil.DecodeWIF(key)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err = keys.Unlock(passphrase); err != nil {
+		if err = mgr.Unlock(privPassphrase); err != nil {
 			t.Fatal(err)
 		}
-		_, err = keys.ImportPrivateKey(wif, bs)
+		_, err = mgr.ImportPrivateKey(wif, bs)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
-	return keys
+	return mgr
 }
 
 // eligibleInputsFromTx decodes the given txHex and returns the outputs with

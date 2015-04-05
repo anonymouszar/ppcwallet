@@ -67,6 +67,7 @@ type expectedAddr struct {
 	addressHash []byte
 	internal    bool
 	compressed  bool
+	used        bool
 	imported    bool
 	pubKey      []byte
 	privKey     []byte
@@ -1016,6 +1017,43 @@ func testImportScript(tc *testContext) bool {
 	return true
 }
 
+// testMarkUsed ensures used addresses are flagged as such.
+func testMarkUsed(tc *testContext) bool {
+	expectedAddr1 := expectedAddr{
+		addressHash: hexToBytes("2ef94abb9ee8f785d087c3ec8d6ee467e92d0d0a"),
+		used:        true,
+	}
+	prefix := "MarkUsed"
+	chainParams := tc.manager.ChainParams()
+	addrHash := expectedAddr1.addressHash
+	addr, err := btcutil.NewAddressPubKeyHash(addrHash, chainParams)
+
+	if tc.create {
+		// Test that initially the address is not flagged as used
+		maddr, err := tc.manager.Address(addr)
+		if err != nil {
+			tc.t.Errorf("%s: unexpected error: %v", prefix, err)
+		}
+		if maddr.Used() != false {
+			tc.t.Errorf("%v: unexpected used flag -- got "+
+				"%v, want %v", prefix, maddr.Used(), expectedAddr1.used)
+		}
+	}
+	err = tc.manager.MarkUsed(addrHash)
+	if err != nil {
+		tc.t.Errorf("%s: unexpected error: %v", prefix, err)
+	}
+	maddr, err := tc.manager.Address(addr)
+	if err != nil {
+		tc.t.Errorf("%s: unexpected error: %v", prefix, err)
+	}
+	if maddr.Used() != expectedAddr1.used {
+		tc.t.Errorf("%v: unexpected used flag -- got "+
+			"%v, want %v", prefix, maddr.Used(), expectedAddr1.used)
+	}
+	return true
+}
+
 // testChangePassphrase ensures changes both the public and privte passphrases
 // works as intended.
 func testChangePassphrase(tc *testContext) bool {
@@ -1120,6 +1158,221 @@ func testChangePassphrase(tc *testContext) bool {
 	return true
 }
 
+// testNewAccount tests the new account creation func of the address manager works
+// as expected.
+func testNewAccount(tc *testContext) bool {
+	if tc.watchingOnly {
+		// Creating new accounts in watching-only mode should return ErrWatchingOnly
+		_, err := tc.manager.NewAccount("test")
+		if !checkManagerError(tc.t, "Create account in watching-only mode", err,
+			waddrmgr.ErrWatchingOnly) {
+			tc.manager.Close()
+			return false
+		}
+		return true
+	}
+	// Creating new accounts when wallet is locked should return ErrLocked
+	_, err := tc.manager.NewAccount("test")
+	if !checkManagerError(tc.t, "Create account when wallet is locked", err,
+		waddrmgr.ErrLocked) {
+		tc.manager.Close()
+		return false
+	}
+	// Unlock the wallet to decrypt cointype keys required
+	// to derive account keys
+	if err := tc.manager.Unlock(privPassphrase); err != nil {
+		tc.t.Errorf("Unlock: unexpected error: %v", err)
+		return false
+	}
+	tc.unlocked = true
+
+	// Get the next account number
+	expectedAccount := tc.account + 1
+	if !tc.create {
+		// Existing wallet manager, so it already has "account-1",
+		// so increment the expected account number
+		expectedAccount++
+	}
+	// Create accounts with names "account-1", "account-2", etc
+	testName := fmt.Sprintf("account-%d", expectedAccount)
+	account, err := tc.manager.NewAccount(testName)
+	if err != nil {
+		tc.t.Errorf("NewAccount: unexpected error: %v", err)
+		return false
+	}
+	if account != expectedAccount {
+		tc.t.Errorf("NewAccount "+
+			"account mismatch -- got %d, "+
+			"want %d", account, expectedAccount)
+		return false
+	}
+	// Test duplicate account name error
+	_, err = tc.manager.NewAccount(testName)
+	wantErrCode := waddrmgr.ErrDuplicateAccount
+	if !checkManagerError(tc.t, testName, err, wantErrCode) {
+		return false
+	}
+	// Test account name validation
+	testName = "*"
+	_, err = tc.manager.NewAccount(testName)
+	wantErrCode = waddrmgr.ErrInvalidAccount
+	if !checkManagerError(tc.t, testName, err, wantErrCode) {
+		return false
+	}
+	return true
+}
+
+// testLookupAccount tests the basic account lookup func of the address manager works
+// as expected.
+func testLookupAccount(tc *testContext) bool {
+	// Lookup accounts created earlier in testNewAccount
+	expectedAccounts := map[string]uint32{
+		waddrmgr.DefaultAccountName:      waddrmgr.DefaultAccountNum,
+		"account-1":                      1,
+		waddrmgr.ImportedAddrAccountName: waddrmgr.ImportedAddrAccount,
+	}
+	if !tc.create {
+		// Existing wallet manager will have 2 accounts
+		expectedAccounts["account-2"] = 2
+	}
+	for acctName, expectedAccount := range expectedAccounts {
+		account, err := tc.manager.LookupAccount(acctName)
+		if err != nil {
+			tc.t.Errorf("LookupAccount: unexpected error: %v", err)
+			return false
+		}
+		if account != expectedAccount {
+			tc.t.Errorf("LookupAccount "+
+				"account mismatch -- got %d, "+
+				"want %d", account, expectedAccount)
+			return false
+		}
+	}
+	// Test account not found error
+	testName := "non existent account"
+	_, err := tc.manager.LookupAccount(testName)
+	wantErrCode := waddrmgr.ErrAccountNotFound
+	if !checkManagerError(tc.t, testName, err, wantErrCode) {
+		return false
+	}
+	return true
+}
+
+// testRenameAccount tests the rename account func of the address manager works
+// as expected.
+func testRenameAccount(tc *testContext) bool {
+	acctName, err := tc.manager.AccountName(tc.account)
+	if err != nil {
+		tc.t.Errorf("AccountName: unexpected error: %v", err)
+		return false
+	}
+	testName := acctName + "-renamed"
+	err = tc.manager.RenameAccount(tc.account, testName)
+	if err != nil {
+		tc.t.Errorf("RenameAccount: unexpected error: %v", err)
+		return false
+	}
+	newName, err := tc.manager.AccountName(tc.account)
+	if err != nil {
+		tc.t.Errorf("AccountName: unexpected error: %v", err)
+		return false
+	}
+	if newName != testName {
+		tc.t.Errorf("RenameAccount "+
+			"account name mismatch -- got %s, "+
+			"want %s", newName, testName)
+		return false
+	}
+	// Test duplicate account name error
+	err = tc.manager.RenameAccount(tc.account, testName)
+	wantErrCode := waddrmgr.ErrDuplicateAccount
+	if !checkManagerError(tc.t, testName, err, wantErrCode) {
+		return false
+	}
+	// Test old account name is no longer valid
+	_, err = tc.manager.LookupAccount(acctName)
+	wantErrCode = waddrmgr.ErrAccountNotFound
+	if !checkManagerError(tc.t, testName, err, wantErrCode) {
+		return false
+	}
+	// Test account name validation
+	testName = "*"
+	err = tc.manager.RenameAccount(tc.account, testName)
+	wantErrCode = waddrmgr.ErrInvalidAccount
+	if !checkManagerError(tc.t, testName, err, wantErrCode) {
+		return false
+	}
+	return true
+}
+
+// testAllAccounts tests the retrieve all accounts func of the address manager works
+// as expected.
+func testAllAccounts(tc *testContext) bool {
+	expectedAccounts := []uint32{0, 1}
+	if !tc.create {
+		// Existing wallet manager will have 3 accounts
+		expectedAccounts = append(expectedAccounts, 2)
+	}
+	// Imported account
+	expectedAccounts = append(expectedAccounts, waddrmgr.ImportedAddrAccount)
+	accounts, err := tc.manager.AllAccounts()
+	if err != nil {
+		tc.t.Errorf("AllAccounts: unexpected error: %v", err)
+		return false
+	}
+	if len(accounts) != len(expectedAccounts) {
+		tc.t.Errorf("AllAccounts: unexpected number of accounts - got "+
+			"%d, want %d", len(accounts),
+			len(expectedAccounts))
+		return false
+	}
+	for i, account := range accounts {
+		if expectedAccounts[i] != account {
+			tc.t.Errorf("AllAccounts %s: "+
+				"account mismatch -- got %d, "+
+				"want %d", i, account, expectedAccounts[i])
+		}
+	}
+	return true
+}
+
+// testActiveAccountAddresses tests the retrieve all account addrs func of the address manager works
+// as expected.
+func testActiveAccountAddresses(tc *testContext) bool {
+	expectedAddrs := []string{
+		"1VTfwD4iHre2bMrR9qGiJMwoiZGQZ8e6s",
+		"1LJpGrAP1vWHuvfHqmUutQqFVYca2qwxhy",
+		"1Jc7An3JqjzRQULVr6Wh3iYR7miB6WPJCD",
+		"1AY6yAHvojvpFcevAichLMnJfxgE8eSe4N",
+		"1LTjSghkBecT59VjEKke331HxVdqcFwUDa",
+		"14wtcepMNiEazuN7YosWY8bwD9tcCtxXRB",
+		"1N3D8jy2aQuUsKBsDgZ6ZPTVR9VhHgJYpE",
+		"13TdEj4ehUuYFiSaB47eLVBwM2XhAhrK2J",
+		"15HNivzKhsLaMs1qRdQN1ifoJYUnJ2xW9z",
+		"13NhXy2nCLMwNug1TZ6uwaWnxp3uTqdDQq",
+	}
+	addrs, err := tc.manager.AllAccountAddresses(tc.account)
+	if err != nil {
+		tc.t.Errorf("ActiveAccountAddresses: unexpected error: %v", err)
+		return false
+	}
+	if len(addrs) != len(expectedAddrs) {
+		tc.t.Errorf("ActiveAccountAddresses: unexpected number of addrs - got "+
+			"%d, want %d", len(addrs),
+			len(expectedAddrs))
+		return false
+	}
+	for i, addr := range addrs {
+		if expectedAddrs[i] != addr.Address().EncodeAddress() {
+			tc.t.Errorf("ActiveAccountAddresses %s: "+
+				"addr mismatch -- got %s, "+
+				"want %s", i, addr.Address().EncodeAddress(),
+				expectedAddrs[i])
+		}
+	}
+	return true
+}
+
 // testManagerAPI tests the functions provided by the Manager API as well as
 // the ManagedAddress, ManagedPubKeyAddress, and ManagedScriptAddress
 // interfaces.
@@ -1129,7 +1382,15 @@ func testManagerAPI(tc *testContext) {
 	testInternalAddresses(tc)
 	testImportPrivateKey(tc)
 	testImportScript(tc)
+	testMarkUsed(tc)
 	testChangePassphrase(tc)
+
+	// Reset default account
+	tc.account = 0
+	testNewAccount(tc)
+	testLookupAccount(tc)
+	testAllAccounts(tc)
+	testActiveAccountAddresses(tc)
 }
 
 // testWatchingOnly tests various facets of a watching-only address
@@ -1168,7 +1429,7 @@ func testWatchingOnly(tc *testContext) bool {
 		tc.t.Errorf("%v", err)
 		return false
 	}
-	if err := mgr.ConvertToWatchingOnly(pubPassphrase); err != nil {
+	if err := mgr.ConvertToWatchingOnly(); err != nil {
 		tc.t.Errorf("%v", err)
 		return false
 	}
@@ -1507,6 +1768,16 @@ func TestManager(t *testing.T) {
 		watchingOnly: false,
 	})
 	mgr.Close()
+
+	// Ensure the expected error is returned if the latest manager version
+	// constant is bumped without writing code to actually do the upgrade.
+	*waddrmgr.TstLatestMgrVersion++
+	_, err = waddrmgr.Open(mgrNamespace, pubPassphrase,
+		&chaincfg.MainNetParams, fastScrypt)
+	if !checkManagerError(t, "Upgrade needed", err, waddrmgr.ErrUpgrade) {
+		return
+	}
+	*waddrmgr.TstLatestMgrVersion--
 
 	// Open the manager and run all the tests again in open mode which
 	// avoids reinserting new addresses like the create mode tests do.

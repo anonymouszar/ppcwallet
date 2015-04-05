@@ -23,11 +23,11 @@ import (
 
 	"github.com/ppcsuite/btcrpcclient"
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/ppcd/btcjson/btcws"
+	"github.com/ppcsuite/ppcd/btcjson/v2/btcjson"
 	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/wire"
-	"github.com/ppcsuite/ppcwallet/keystore"
 	"github.com/ppcsuite/ppcwallet/txstore"
+	"github.com/ppcsuite/ppcwallet/waddrmgr"
 )
 
 // Client represents a persistent client connection to a bitcoin RPC server
@@ -38,7 +38,7 @@ type Client struct {
 
 	enqueueNotification chan interface{}
 	dequeueNotification chan interface{}
-	currentBlock        chan *keystore.BlockStamp
+	currentBlock        chan *waddrmgr.BlockStamp
 
 	currentTarget chan uint32 // ppc:
 
@@ -66,8 +66,7 @@ func NewClient(chainParams *chaincfg.Params, connect, user, pass string, certs [
 		chainParams:         chainParams,
 		enqueueNotification: make(chan interface{}),
 		dequeueNotification: make(chan interface{}),
-		currentBlock:        make(chan *keystore.BlockStamp),
-		notificationLock:    new(sync.Mutex),
+		currentBlock:        make(chan *waddrmgr.BlockStamp),
 		quit:                make(chan struct{}),
 		currentTarget:       make(chan uint32), // ppc:
 	}
@@ -158,13 +157,17 @@ func (c *Client) WaitForShutdown() {
 // btcrpcclient callbacks, which isn't very Go-like and doesn't allow
 // blocking client calls.
 type (
+	// ClientConnected is a notification for when a client connection is
+	// opened or reestablished to the chain server.
+	ClientConnected struct{}
+
 	// BlockConnected is a notification for a newly-attached block to the
 	// best chain.
-	BlockConnected keystore.BlockStamp
+	BlockConnected waddrmgr.BlockStamp
 
 	// BlockDisconnected is a notifcation that the block described by the
 	// BlockStamp was reorganized out of the best chain.
-	BlockDisconnected keystore.BlockStamp
+	BlockDisconnected waddrmgr.BlockStamp
 
 	// RecvTx is a notification for a transaction which pays to a wallet
 	// address.
@@ -207,7 +210,7 @@ func (c *Client) Notifications() <-chan interface{} {
 
 // BlockStamp returns the latest block notified by the client, or an error
 // if the client has been shut down.
-func (c *Client) BlockStamp() (*keystore.BlockStamp, error) {
+func (c *Client) BlockStamp() (*waddrmgr.BlockStamp, error) {
 	select {
 	case bs := <-c.currentBlock:
 		return bs, nil
@@ -219,7 +222,7 @@ func (c *Client) BlockStamp() (*keystore.BlockStamp, error) {
 // parseBlock parses a btcws definition of the block a tx is mined it to the
 // Block structure of the txstore package, and the block index.  This is done
 // here since btcrpcclient doesn't parse this nicely for us.
-func parseBlock(block *btcws.BlockDetails) (blk *txstore.Block, idx int, offset uint32, err error) { // ppc: tx offset return value added
+func parseBlock(block *btcjson.BlockDetails) (blk *txstore.Block, idx int, offset uint32, err error) { // ppc: tx offset return value added
 	if block == nil {
 		return nil, btcutil.TxIndexUnknown, btcutil.TxOffsetUnknown, nil
 	}
@@ -238,18 +241,18 @@ func parseBlock(block *btcws.BlockDetails) (blk *txstore.Block, idx int, offset 
 
 func (c *Client) onClientConnect() {
 	log.Info("Established websocket RPC connection to btcd")
-	c.notifyConnected(true)
+	c.enqueueNotification <- ClientConnected{}
 }
 
 func (c *Client) onBlockConnected(hash *wire.ShaHash, height int32) {
-	c.enqueueNotification <- BlockConnected{Hash: hash, Height: height}
+	c.enqueueNotification <- BlockConnected{Hash: *hash, Height: height}
 }
 
 func (c *Client) onBlockDisconnected(hash *wire.ShaHash, height int32) {
-	c.enqueueNotification <- BlockDisconnected{Hash: hash, Height: height}
+	c.enqueueNotification <- BlockDisconnected{Hash: *hash, Height: height}
 }
 
-func (c *Client) onRecvTx(tx *btcutil.Tx, block *btcws.BlockDetails) {
+func (c *Client) onRecvTx(tx *btcutil.Tx, block *btcjson.BlockDetails) {
 	var blk *txstore.Block
 	index := btcutil.TxIndexUnknown
 	offset := btcutil.TxOffsetUnknown // ppc:
@@ -267,7 +270,7 @@ func (c *Client) onRecvTx(tx *btcutil.Tx, block *btcws.BlockDetails) {
 	c.enqueueNotification <- RecvTx{tx, blk}
 }
 
-func (c *Client) onRedeemingTx(tx *btcutil.Tx, block *btcws.BlockDetails) {
+func (c *Client) onRedeemingTx(tx *btcutil.Tx, block *btcjson.BlockDetails) {
 	var blk *txstore.Block
 	index := btcutil.TxIndexUnknown
 	offset := btcutil.TxOffsetUnknown // ppc:
@@ -303,13 +306,14 @@ func (c *Client) handler() {
 	}
 
 	// ppc:
-	target, err := c.GetNextRequiredTarget(true)
+	proofOfStake := true
+	target, err := c.GetNextRequiredTarget(&proofOfStake)
 	if err != nil {
 		close(c.quit)
 		c.wg.Done()
 	}
 
-	bs := &keystore.BlockStamp{Hash: hash, Height: height}
+	bs := &waddrmgr.BlockStamp{Hash: *hash, Height: height}
 
 	// TODO: Rather than leaving this as an unbounded queue for all types of
 	// notifications, try dropping ones where a later enqueued notification
@@ -344,9 +348,10 @@ out:
 
 		case dequeue <- next:
 			if n, ok := next.(BlockConnected); ok {
-				bs = (*keystore.BlockStamp)(&n)
+				bs = (*waddrmgr.BlockStamp)(&n)
 				// ppc: TODO(mably)
-				target, err = c.GetNextRequiredTarget(true)
+				proofOfStake := true
+				target, err = c.GetNextRequiredTarget(&proofOfStake)
 				if err == nil {
 					log.Infof("Next required target received: %v", target)
 				} else {
@@ -377,50 +382,4 @@ out:
 	}
 	close(c.dequeueNotification)
 	c.wg.Done()
-}
-
-// ErrDuplicateListen is returned for any attempts to listen for the same
-// notification more than once.  If callers must pass along a notifiation to
-// multiple places, they must broadcast it themself.
-var ErrDuplicateListen = errors.New("duplicate listen")
-
-type noopLocker struct{}
-
-func (noopLocker) Lock()   {}
-func (noopLocker) Unlock() {}
-
-// ListenConnected returns a channel that passes the current connection state
-// of the client.  This will be automatically sent to when the client is first
-// connected, as well as the current state whenever NotifyConnected is
-// forcibly called.
-//
-// If this is called twice, ErrDuplicateListen is returned.
-func (c *Client) ListenConnected() (<-chan bool, error) {
-	c.notificationLock.Lock()
-	defer c.notificationLock.Unlock()
-
-	if c.connected != nil {
-		return nil, ErrDuplicateListen
-	}
-	c.connected = make(chan bool)
-	c.notificationLock = noopLocker{}
-	return c.connected, nil
-}
-
-func (c *Client) notifyConnected(connected bool) {
-	c.notificationLock.Lock()
-	if c.connected != nil {
-		c.connected <- connected
-	}
-	c.notificationLock.Unlock()
-}
-
-// NotifyConnected sends the channel notification for a connected or
-// disconnected client.  This is exported so it can be called by other
-// packages which require notifying the current connection state.
-//
-// TODO: This shouldn't exist, but the current notification API requires it.
-func (c *Client) NotifyConnected() {
-	connected := !c.Client.Disconnected()
-	c.notifyConnected(connected)
 }

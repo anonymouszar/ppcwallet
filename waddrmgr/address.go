@@ -19,38 +19,13 @@ package waddrmgr
 import (
 	"encoding/hex"
 	"fmt"
-	"math/big"
 	"sync"
 
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/btcutil/hdkeychain"
 	"github.com/ppcsuite/ppcd/btcec"
+	"github.com/ppcsuite/ppcwallet/internal/zero"
 )
-
-// zero sets all bytes in the passed slice to zero.  This is used to
-// explicitly clear private key material from memory.
-func zero(b []byte) {
-	for i := range b {
-		b[i] ^= b[i]
-	}
-}
-
-// zeroBigInt sets all bytes in the passed big int to zero and then sets the
-// value to 0.  This differs from simply setting the value in that it
-// specifically clears the underlying bytes whereas simply setting the value
-// does not.  This is mostly useful to forcefully clear private keys.
-func zeroBigInt(x *big.Int) {
-	// NOTE: This could make use of .Xor, however this is safer since the
-	// specific implementation of Xor could technically change in such a way
-	// as the original bits aren't cleared.  This function would silenty
-	// fail in that case and it's best to avoid that possibility.
-	bits := x.Bits()
-	numBits := len(bits)
-	for i := 0; i < numBits; i++ {
-		bits[i] ^= bits[i]
-	}
-	x.SetInt64(0)
-}
 
 // ManagedAddress is an interface that provides acces to information regarding
 // an address managed by an address manager. Concrete implementations of this
@@ -76,6 +51,9 @@ type ManagedAddress interface {
 
 	// Compressed returns true if the backing address is compressed.
 	Compressed() bool
+
+	// Used returns true if the backing address has been used in a transaction.
+	Used() bool
 }
 
 // ManagedPubKeyAddress extends ManagedAddress and additionally provides the
@@ -119,6 +97,7 @@ type managedAddress struct {
 	imported         bool
 	internal         bool
 	compressed       bool
+	used             bool
 	pubKey           *btcec.PublicKey
 	privKeyEncrypted []byte
 	privKeyCT        []byte // non-nil if unlocked
@@ -159,7 +138,7 @@ func (a *managedAddress) lock() {
 	// Zero and nil the clear text private key associated with this
 	// address.
 	a.privKeyMutex.Lock()
-	zero(a.privKeyCT)
+	zero.Bytes(a.privKeyCT)
 	a.privKeyCT = nil
 	a.privKeyMutex.Unlock()
 }
@@ -207,6 +186,13 @@ func (a *managedAddress) Internal() bool {
 // This is part of the ManagedAddress interface implementation.
 func (a *managedAddress) Compressed() bool {
 	return a.compressed
+}
+
+// Used returns true if the address has been used in a transaction.
+//
+// This is part of the ManagedAddress interface implementation.
+func (a *managedAddress) Used() bool {
+	return a.used
 }
 
 // PubKey returns the public key associated with the address.
@@ -260,7 +246,7 @@ func (a *managedAddress) PrivKey() (*btcec.PrivateKey, error) {
 	}
 
 	privKey, _ := btcec.PrivKeyFromBytes(btcec.S256(), privKeyCopy)
-	zero(privKeyCopy)
+	zero.Bytes(privKeyCopy)
 	return privKey, nil
 }
 
@@ -351,7 +337,7 @@ func newManagedAddressFromExtKey(m *Manager, account uint32, key *hdkeychain.Ext
 
 		// Ensure the temp private key big integer is cleared after use.
 		managedAddr, err = newManagedAddress(m, account, privKey, true)
-		zeroBigInt(privKey.D)
+		zero.BigInt(privKey.D)
 		if err != nil {
 			return nil, err
 		}
@@ -379,6 +365,7 @@ type scriptAddress struct {
 	scriptEncrypted []byte
 	scriptCT        []byte
 	scriptMutex     sync.Mutex
+	used            bool
 }
 
 // Enforce scriptAddress satisfies the ManagedScriptAddress interface.
@@ -413,7 +400,7 @@ func (a *scriptAddress) unlock(key EncryptorDecryptor) ([]byte, error) {
 func (a *scriptAddress) lock() {
 	// Zero and nil the clear text script associated with this address.
 	a.scriptMutex.Lock()
-	zero(a.scriptCT)
+	zero.Bytes(a.scriptCT)
 	a.scriptCT = nil
 	a.scriptMutex.Unlock()
 }
@@ -466,6 +453,13 @@ func (a *scriptAddress) Compressed() bool {
 	return false
 }
 
+// Used returns true if the address has been used in a transaction.
+//
+// This is part of the ManagedAddress interface implementation.
+func (a *scriptAddress) Used() bool {
+	return a.used
+}
+
 // Script returns the script associated with the address.
 //
 // This implements the ScriptAddress interface.
@@ -490,7 +484,7 @@ func (a *scriptAddress) Script() ([]byte, error) {
 }
 
 // newScriptAddress initializes and returns a new pay-to-script-hash address.
-func newScriptAddress(m *Manager, account uint32, scriptHash, scriptEncrypted []byte) (*scriptAddress, error) {
+func newScriptAddress(m *Manager, account uint32, scriptHash, scriptEncrypted []byte, used bool) (*scriptAddress, error) {
 	address, err := btcutil.NewAddressScriptHashFromHash(scriptHash,
 		m.chainParams)
 	if err != nil {
@@ -502,5 +496,6 @@ func newScriptAddress(m *Manager, account uint32, scriptHash, scriptEncrypted []
 		account:         account,
 		address:         address,
 		scriptEncrypted: scriptEncrypted,
+		used:            used,
 	}, nil
 }

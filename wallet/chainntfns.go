@@ -14,24 +14,37 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package wallet
 
 import (
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcwallet/chain"
-	"github.com/ppcsuite/ppcwallet/keystore"
 	"github.com/ppcsuite/ppcwallet/txstore"
+	"github.com/ppcsuite/ppcwallet/waddrmgr"
 )
 
 func (w *Wallet) handleChainNotifications() {
+	sync := func(w *Wallet) {
+		// At the moment there is no recourse if the rescan fails for
+		// some reason, however, the wallet will not be marked synced
+		// and many methods will error early since the wallet is known
+		// to be out of date.
+		err := w.syncWithChain()
+		if err != nil && !w.ShuttingDown() {
+			log.Warnf("Unable to synchronize wallet to chain: %v", err)
+		}
+	}
+
 	for n := range w.chainSvr.Notifications() {
 		var err error
 		switch n := n.(type) {
+		case chain.ClientConnected:
+			go sync(w)
 		case chain.BlockConnected:
-			w.connectBlock(keystore.BlockStamp(n))
+			w.connectBlock(waddrmgr.BlockStamp(n))
 		case chain.BlockDisconnected:
-			w.disconnectBlock(keystore.BlockStamp(n))
+			w.disconnectBlock(waddrmgr.BlockStamp(n))
 		case chain.RecvTx:
 			err = w.addReceivedTx(n.Tx, n.Block)
 		case chain.RedeemingTx:
@@ -53,13 +66,16 @@ func (w *Wallet) handleChainNotifications() {
 // connectBlock handles a chain server notification by marking a wallet
 // that's currently in-sync with the chain server as being synced up to
 // the passed block.
-func (w *Wallet) connectBlock(bs keystore.BlockStamp) {
+func (w *Wallet) connectBlock(bs waddrmgr.BlockStamp) {
 	if !w.ChainSynced() {
 		return
 	}
 
-	w.KeyStore.SetSyncedWith(&bs)
-	w.KeyStore.MarkDirty()
+	if err := w.Manager.SetSyncedTo(&bs); err != nil {
+		log.Errorf("Failed to update address manager sync state in "+
+			"connect block for hash %v (height %d): %v", bs.Hash,
+			bs.Height, err)
+	}
 	w.notifyConnectedBlock(bs)
 
 	w.notifyBalances(bs.Height)
@@ -68,22 +84,26 @@ func (w *Wallet) connectBlock(bs keystore.BlockStamp) {
 // disconnectBlock handles a chain server reorganize by rolling back all
 // block history from the reorged block for a wallet in-sync with the chain
 // server.
-func (w *Wallet) disconnectBlock(bs keystore.BlockStamp) {
+func (w *Wallet) disconnectBlock(bs waddrmgr.BlockStamp) {
 	if !w.ChainSynced() {
 		return
 	}
 
-	// Disconnect the last seen block from the keystore if it
-	// matches the removed block.
-	iter := w.KeyStore.NewIterateRecentBlocks()
-	if iter != nil && *iter.BlockStamp().Hash == *bs.Hash {
+	// Disconnect the last seen block from the manager if it matches the
+	// removed block.
+	iter := w.Manager.NewIterateRecentBlocks()
+	if iter != nil && iter.BlockStamp().Hash == bs.Hash {
 		if iter.Prev() {
 			prev := iter.BlockStamp()
-			w.KeyStore.SetSyncedWith(&prev)
+			w.Manager.SetSyncedTo(&prev)
 		} else {
-			w.KeyStore.SetSyncedWith(nil)
+			// The reorg is farther back than the recently-seen list
+			// of blocks has recorded, so set it to unsynced which
+			// will in turn lead to a rescan from either the
+			// earliest blockstamp the addresses in the manager are
+			// known to have been created.
+			w.Manager.SetSyncedTo(nil)
 		}
-		w.KeyStore.MarkDirty()
 	}
 	w.notifyDisconnectedBlock(bs)
 
@@ -100,10 +120,10 @@ func (w *Wallet) addReceivedTx(tx *btcutil.Tx, block *txstore.Block) error {
 		// Errors don't matter here.  If addrs is nil, the range below
 		// does nothing.
 		_, addrs, _, _ := txscript.ExtractPkScriptAddrs(txOut.PkScript,
-			activeNet.Params)
+			w.chainParams)
 		insert := false
 		for _, addr := range addrs {
-			_, err := w.KeyStore.Address(addr)
+			_, err := w.Manager.Address(addr)
 			if err == nil {
 				insert = true
 				break
@@ -150,7 +170,9 @@ func (w *Wallet) addRedeemingTx(tx *btcutil.Tx, block *txstore.Block) error {
 	if _, err := txr.AddDebits(); err != nil {
 		return err
 	}
-	w.KeyStore.MarkDirty()
+	if err := w.markAddrsUsed(txr); err != nil {
+		return err
+	}
 
 	bs, err := w.chainSvr.BlockStamp()
 	if err == nil {
@@ -167,13 +189,13 @@ func (w *Wallet) notifyBalances(curHeight int32) {
 	}
 
 	// Notify any potential changes to the balance.
-	confirmed, err := w.TxStore.Balance(1, curHeight, activeNet.Params)
+	confirmed, err := w.TxStore.Balance(1, curHeight, w.chainParams)
 	if err != nil {
 		log.Errorf("Cannot determine 1-conf balance: %v", err)
 		return
 	}
 	w.notifyConfirmedBalance(confirmed)
-	unconfirmed, err := w.TxStore.Balance(0, curHeight, activeNet.Params)
+	unconfirmed, err := w.TxStore.Balance(0, curHeight, w.chainParams)
 	if err != nil {
 		log.Errorf("Cannot determine 0-conf balance: %v", err)
 		return

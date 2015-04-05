@@ -7,7 +7,7 @@
 //
 // +build ignore
 
-package main
+package wallet
 
 import (
 	"testing"
@@ -20,7 +20,7 @@ import (
 )
 
 func init() {
-	cfg = &config{
+	cfg = &Config{
 		KeypoolSize: 100,
 	}
 }

@@ -14,7 +14,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package main
+package wallet
 
 import (
 	"errors"
@@ -24,10 +24,11 @@ import (
 	"time"
 
 	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"
-	"github.com/ppcsuite/ppcwallet/keystore"
 	"github.com/ppcsuite/ppcwallet/txstore"
+	"github.com/ppcsuite/ppcwallet/waddrmgr"
 )
 
 const (
@@ -100,16 +101,16 @@ var ErrNonPositiveAmount = errors.New("amount is not positive")
 // negative.
 var ErrNegativeFee = errors.New("fee is negative")
 
-// defaultFeeIncrement is the default minimum transation fee (0.0001 BTC,
+// defaultFeeIncrement is the default minimum transation fee (0.00001 BTC,
 // measured in satoshis) added to transactions requiring a fee.
 const defaultFeeIncrement = 1e3
 
 // CreatedTx holds the state of a newly-created transaction and the change
 // output (if one was added).
 type CreatedTx struct {
-	tx          *btcutil.Tx
-	changeAddr  btcutil.Address
-	changeIndex int // negative if no change
+	Tx          *btcutil.Tx
+	ChangeAddr  btcutil.Address
+	ChangeIndex int // negative if no change
 }
 
 // ByAmount defines the methods needed to satisify sort.Interface to
@@ -127,11 +128,11 @@ func (u ByAmount) Swap(i, j int)      { u[i], u[j] = u[j], u[i] }
 // to addr or as a fee for the miner are sent to a newly generated
 // address. InsufficientFundsError is returned if there are not enough
 // eligible unspent outputs to create the transaction.
-func (w *Wallet) txToPairs(pairs map[string]btcutil.Amount, minconf int) (*CreatedTx, error) {
+func (w *Wallet) txToPairs(pairs map[string]btcutil.Amount, account uint32, minconf int) (*CreatedTx, error) {
 
-	// Key store must be unlocked to compose transaction.  Grab the
-	// unlock if possible (to prevent future unlocks), or return the
-	// error if the keystore is already locked.
+	// Address manager must be unlocked to compose transaction.  Grab
+	// the unlock if possible (to prevent future unlocks), or return the
+	// error if already locked.
 	heldUnlock, err := w.HoldUnlock()
 	if err != nil {
 		return nil, err
@@ -144,12 +145,12 @@ func (w *Wallet) txToPairs(pairs map[string]btcutil.Amount, minconf int) (*Creat
 		return nil, err
 	}
 
-	eligible, err := w.findEligibleOutputs(minconf, bs)
+	eligible, err := w.findEligibleOutputs(account, minconf, bs)
 	if err != nil {
 		return nil, err
 	}
 
-	return createTx(eligible, pairs, bs, w.FeeIncrement, w.KeyStore, w.changeAddress)
+	return createTx(eligible, pairs, bs, w.FeeIncrement, w.Manager, account, w.NewChangeAddress, w.chainParams, w.DisallowFree)
 }
 
 // createTx selects inputs (from the given slice of eligible utxos)
@@ -157,17 +158,14 @@ func (w *Wallet) txToPairs(pairs map[string]btcutil.Amount, minconf int) (*Creat
 // the mining fee. It then creates and returns a CreatedTx containing
 // the selected inputs and the given outputs, validating it (using
 // validateMsgTx) as well.
-func createTx(
-	eligible []txstore.Credit,
-	outputs map[string]btcutil.Amount,
-	bs *keystore.BlockStamp,
-	feeIncrement btcutil.Amount,
-	keys *keystore.Store,
-	changeAddress func(*keystore.BlockStamp) (btcutil.Address, error)) (
-	*CreatedTx, error) {
+func createTx(eligible []txstore.Credit,
+	outputs map[string]btcutil.Amount, bs *waddrmgr.BlockStamp,
+	feeIncrement btcutil.Amount, mgr *waddrmgr.Manager, account uint32,
+	changeAddress func(account uint32) (btcutil.Address, error),
+	chainParams *chaincfg.Params, disallowFree bool) (*CreatedTx, error) {
 
 	msgtx := wire.NewMsgTx()
-	minAmount, err := addOutputs(msgtx, outputs)
+	minAmount, err := addOutputs(msgtx, outputs, chainParams)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +192,7 @@ func createTx(
 	// Get an initial fee estimate based on the number of selected inputs
 	// and added outputs, with no change.
 	szEst := estimateTxSize(len(inputs), len(msgtx.TxOut))
-	feeEst := minimumFee(feeIncrement, szEst, msgtx.TxOut, inputs, bs.Height)
+	feeEst := minimumFee(feeIncrement, szEst, msgtx.TxOut, inputs, bs.Height, disallowFree)
 
 	// Now make sure the sum amount of all our inputs is enough for the
 	// sum amount of all outputs plus the fee. If necessary we add more,
@@ -208,7 +206,7 @@ func createTx(
 		msgtx.AddTxIn(wire.NewTxIn(input.OutPoint(), nil))
 		szEst += txInEstimate
 		totalAdded += input.Amount()
-		feeEst = minimumFee(feeIncrement, szEst, msgtx.TxOut, inputs, bs.Height)
+		feeEst = minimumFee(feeIncrement, szEst, msgtx.TxOut, inputs, bs.Height, disallowFree)
 	}
 
 	var changeAddr btcutil.Address
@@ -219,7 +217,7 @@ func createTx(
 		change := totalAdded - minAmount - feeEst
 		if change > 0 {
 			if changeAddr == nil {
-				changeAddr, err = changeAddress(bs)
+				changeAddr, err = changeAddress(account)
 				if err != nil {
 					return nil, err
 				}
@@ -231,7 +229,7 @@ func createTx(
 			}
 		}
 
-		if err = signMsgTx(msgtx, inputs, keys); err != nil {
+		if err = signMsgTx(msgtx, inputs, mgr, chainParams); err != nil {
 			return nil, err
 		}
 
@@ -259,7 +257,7 @@ func createTx(
 			msgtx.AddTxIn(wire.NewTxIn(input.OutPoint(), nil))
 			szEst += txInEstimate
 			totalAdded += input.Amount()
-			feeEst = minimumFee(feeIncrement, szEst, msgtx.TxOut, inputs, bs.Height)
+			feeEst = minimumFee(feeIncrement, szEst, msgtx.TxOut, inputs, bs.Height, disallowFree)
 		}
 	}
 
@@ -268,9 +266,9 @@ func createTx(
 	}
 
 	info := &CreatedTx{
-		tx:          btcutil.NewTx(msgtx),
-		changeAddr:  changeAddr,
-		changeIndex: changeIdx,
+		Tx:          btcutil.NewTx(msgtx),
+		ChangeAddr:  changeAddr,
+		ChangeIndex: changeIdx,
 	}
 	return info, nil
 }
@@ -292,33 +290,16 @@ func addChange(msgtx *wire.MsgTx, change btcutil.Amount, changeAddr btcutil.Addr
 	return int(r), nil
 }
 
-// changeAddress obtains a new btcutil.Address to be used as a change
-// transaction output. It will also mark the KeyStore as dirty and
-// tells chainSvr to watch that address.
-func (w *Wallet) changeAddress(bs *keystore.BlockStamp) (btcutil.Address, error) {
-	changeAddr, err := w.KeyStore.ChangeAddress(bs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get change address: %s", err)
-	}
-	w.KeyStore.MarkDirty()
-	err = w.chainSvr.NotifyReceived([]btcutil.Address{changeAddr})
-	if err != nil {
-		return nil, fmt.Errorf("cannot request updates for "+
-			"change address: %v", err)
-	}
-	return changeAddr, nil
-}
-
 // addOutputs adds the given address/amount pairs as outputs to msgtx,
 // returning their total amount.
-func addOutputs(msgtx *wire.MsgTx, pairs map[string]btcutil.Amount) (btcutil.Amount, error) {
+func addOutputs(msgtx *wire.MsgTx, pairs map[string]btcutil.Amount, chainParams *chaincfg.Params) (btcutil.Amount, error) {
 	var minAmount btcutil.Amount
 	for addrStr, amt := range pairs {
 		if amt <= 0 {
 			return minAmount, ErrNonPositiveAmount
 		}
 		minAmount += amt
-		addr, err := btcutil.DecodeAddress(addrStr, activeNet.Params)
+		addr, err := btcutil.DecodeAddress(addrStr, chainParams)
 		if err != nil {
 			return minAmount, fmt.Errorf("cannot decode address: %s", err)
 		}
@@ -334,7 +315,7 @@ func addOutputs(msgtx *wire.MsgTx, pairs map[string]btcutil.Amount) (btcutil.Amo
 	return minAmount, nil
 }
 
-func (w *Wallet) findEligibleOutputs(minconf int, bs *keystore.BlockStamp) ([]txstore.Credit, error) {
+func (w *Wallet) findEligibleOutputs(account uint32, minconf int, bs *waddrmgr.BlockStamp) ([]txstore.Credit, error) {
 	unspent, err := w.TxStore.UnspentOutputs()
 	if err != nil {
 		return nil, err
@@ -353,7 +334,7 @@ func (w *Wallet) findEligibleOutputs(minconf int, bs *keystore.BlockStamp) ([]tx
 			// Coinbase transactions must have have reached maturity
 			// before their outputs may be spent.
 			if unspent[i].IsCoinbase() {
-				target := int(activeNet.Params.CoinbaseMaturity)
+				target := int(w.chainParams.CoinbaseMaturity) // ppc:
 				if !unspent[i].Confirmed(target, bs.Height) {
 					continue
 				}
@@ -364,7 +345,13 @@ func (w *Wallet) findEligibleOutputs(minconf int, bs *keystore.BlockStamp) ([]tx
 				continue
 			}
 
-			eligible = append(eligible, unspent[i])
+			creditAccount, err := w.CreditAccount(unspent[i])
+			if err != nil {
+				continue
+			}
+			if creditAccount == account {
+				eligible = append(eligible, unspent[i])
+			}
 		}
 	}
 	return eligible, nil
@@ -373,7 +360,7 @@ func (w *Wallet) findEligibleOutputs(minconf int, bs *keystore.BlockStamp) ([]tx
 // signMsgTx sets the SignatureScript for every item in msgtx.TxIn.
 // It must be called every time a msgtx is changed.
 // Only P2PKH outputs are supported at this point.
-func signMsgTx(msgtx *wire.MsgTx, prevOutputs []txstore.Credit, store *keystore.Store) error {
+func signMsgTx(msgtx *wire.MsgTx, prevOutputs []txstore.Credit, mgr *waddrmgr.Manager, chainParams *chaincfg.Params) error {
 	if len(prevOutputs) != len(msgtx.TxIn) {
 		return fmt.Errorf(
 			"Number of prevOutputs (%d) does not match number of tx inputs (%d)",
@@ -382,7 +369,7 @@ func signMsgTx(msgtx *wire.MsgTx, prevOutputs []txstore.Credit, store *keystore.
 	for i, output := range prevOutputs {
 		// Errors don't matter here, as we only consider the
 		// case where len(addrs) == 1.
-		_, addrs, _, _ := output.Addresses(activeNet.Params)
+		_, addrs, _, _ := output.Addresses(chainParams)
 		if len(addrs) != 1 {
 			continue
 		}
@@ -391,19 +378,20 @@ func signMsgTx(msgtx *wire.MsgTx, prevOutputs []txstore.Credit, store *keystore.
 			return ErrUnsupportedTransactionType
 		}
 
-		ai, err := store.Address(apkh)
+		ai, err := mgr.Address(apkh)
 		if err != nil {
 			return fmt.Errorf("cannot get address info: %v", err)
 		}
 
-		pka := ai.(keystore.PubKeyAddress)
+		pka := ai.(waddrmgr.ManagedPubKeyAddress)
 		privkey, err := pka.PrivKey()
 		if err != nil {
 			return fmt.Errorf("cannot get private key: %v", err)
 		}
 
-		sigscript, err := txscript.SignatureScript(
-			msgtx, i, output.TxOut().PkScript, txscript.SigHashAll, privkey, ai.Compressed())
+		sigscript, err := txscript.SignatureScript(msgtx, i,
+			output.TxOut().PkScript, txscript.SigHashAll, privkey,
+			ai.Compressed())
 		if err != nil {
 			return fmt.Errorf("cannot create sigscript: %s", err)
 		}
@@ -433,7 +421,7 @@ func validateMsgTx(msgtx *wire.MsgTx, prevOutputs []txstore.Credit) error {
 // s less than 1 kilobyte and none of the outputs contain a value
 // less than 1 bitcent. Otherwise, the fee will be calculated using
 // incr, incrementing the fee for each kilobyte of transaction.
-func minimumFee(incr btcutil.Amount, txLen int, outputs []*wire.TxOut, prevOutputs []txstore.Credit, height int32) btcutil.Amount {
+func minimumFee(incr btcutil.Amount, txLen int, outputs []*wire.TxOut, prevOutputs []txstore.Credit, height int32, disallowFree bool) btcutil.Amount {
 	allowFree := false
 	/*if !cfg.DisallowFree { // ppc: peercoin has no free tx
 		allowFree = allowNoFeeTx(height, prevOutputs, txLen)

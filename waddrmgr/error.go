@@ -57,6 +57,11 @@ const (
 	// set to the underlying error returned from the database.
 	ErrDatabase ErrorCode = iota
 
+	// ErrUpgrade indicates the manager needs to be upgraded.  This should
+	// not happen in practice unless the version number has been increased
+	// and there is not yet any code written to upgrade.
+	ErrUpgrade
+
 	// ErrKeyChain indicates an error with the key chain typically either
 	// due to the inability to create an extended key or deriving a child
 	// extended key.  When this error code is set, the Err field of the
@@ -109,8 +114,11 @@ const (
 	// the account manager.
 	ErrAccountNotFound
 
-	// ErrDuplicate indicates that an address already exists.
-	ErrDuplicate
+	// ErrDuplicateAddress indicates an address already exists.
+	ErrDuplicateAddress
+
+	// ErrDuplicateAccount indicates an account already exists.
+	ErrDuplicateAccount
 
 	// ErrTooManyAddresses indicates that more than the maximum allowed number of
 	// addresses per account have been requested.
@@ -128,6 +136,7 @@ const (
 // Map of ErrorCode values back to their constant names for pretty printing.
 var errorCodeStrings = map[ErrorCode]string{
 	ErrDatabase:          "ErrDatabase",
+	ErrUpgrade:           "ErrUpgrade",
 	ErrKeyChain:          "ErrKeyChain",
 	ErrCrypto:            "ErrCrypto",
 	ErrInvalidKeyType:    "ErrInvalidKeyType",
@@ -140,30 +149,11 @@ var errorCodeStrings = map[ErrorCode]string{
 	ErrInvalidAccount:    "ErrInvalidAccount",
 	ErrAddressNotFound:   "ErrAddressNotFound",
 	ErrAccountNotFound:   "ErrAccountNotFound",
-	ErrDuplicate:         "ErrDuplicate",
+	ErrDuplicateAddress:  "ErrDuplicateAddress",
+	ErrDuplicateAccount:  "ErrDuplicateAccount",
 	ErrTooManyAddresses:  "ErrTooManyAddresses",
 	ErrWrongPassphrase:   "ErrWrongPassphrase",
 	ErrWrongNet:          "ErrWrongNet",
-
-	// The following error codes are defined in pool_error.go.
-	ErrSeriesStorage:             "ErrSeriesStorage",
-	ErrSeriesVersion:             "ErrSeriesVersion",
-	ErrSeriesNotExists:           "ErrSeriesNotExists",
-	ErrSeriesAlreadyExists:       "ErrSeriesAlreadyExists",
-	ErrSeriesAlreadyEmpowered:    "ErrSeriesAlreadyEmpowered",
-	ErrKeyIsPrivate:              "ErrKeyIsPrivate",
-	ErrKeyIsPublic:               "ErrKeyIsPublic",
-	ErrKeyNeuter:                 "ErrKeyNeuter",
-	ErrKeyMismatch:               "ErrKeyMismatch",
-	ErrKeysPrivatePublicMismatch: "ErrKeysPrivatePublicMismatch",
-	ErrKeyDuplicate:              "ErrKeyDuplicate",
-	ErrTooFewPublicKeys:          "ErrTooFewPublicKeys",
-	ErrVotingPoolAlreadyExists:   "ErrVotingPoolAlreadyExists",
-	ErrVotingPoolNotExists:       "ErrVotingPoolNotExists",
-	ErrScriptCreation:            "ErrScriptCreation",
-	ErrTooManyReqSignatures:      "ErrTooManyReqSignatures",
-	ErrInvalidBranch:             "ErrInvalidBranch",
-	ErrInvalidValue:              "ErrInvalidValue",
 }
 
 // String returns the ErrorCode as a human-readable name.

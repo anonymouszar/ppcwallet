@@ -3,15 +3,181 @@ User visible changes for btcwallet
   A wallet daemon for btcd, written in Go
 ============================================================================
 
+Changes in 0.5.1 (Fri Mar 06 2015)
+  - New features:
+    - Add flag (--createtemp) to create a temporary simnet wallet
+
+  - Bug fixes:
+    - Mark newly received transactions confirmed when the wallet is initially
+      created or opened with no addresses
+
+  - Notable developer-related changes:
+    - Refactor the address manager database upgrade paths for easier future
+      upgrades
+    - Private key zeroing functions consolidated into the internal zero package
+      and optimized
+
+Changes in 0.5.0 (Tue Mar 03 2015)
+  - New features:
+    - Add a new address manager package (waddrmgr) to replace the previous
+      wallet/keystore package:
+      - BIP0032 hierarchical deterministic keys
+      - BIP0043/BIP0044 multi-account hierarchy
+      - Strong focus on security:
+        - Wallet master encryption keys protected by scrypt PBKDF
+        - NaCl-based secretbox cryptography (XSalsa20 and Poly1305)
+        - Mandatory encryption of private keys and P2SH redeeming scripts
+        - Optional encryption of public data, including extended public keys
+          and addresses
+        - Different crypto keys for redeeming scripts to mitigate cryptanalysis
+        - Hardened against memory scraping through the use of actively clearing
+          private material from memory when locked
+        - Different crypto keys used for public, private, and script data
+        - Ability for different passphrases for public and private data
+      - Multi-tier scalable key design to allow instant password changes
+        regardless of the number of addresses stored
+      - Import WIF keys
+      - Import pay-to-script-hash scripts for things such as multi-signature
+        transactions
+      - Ability to export a watching-only version which does not contain any
+        private key material
+      - Programmatically detectable errors, including encapsulation of errors
+        from packages it relies on
+      - Address synchronization capabilities
+    - Add a new namespaced database package (walletdb):
+      - Key/value store
+      - Namespace support
+      - Allows multiple packages to have their own area in the database without
+        worrying about conflicts
+      - Read-only and read-write transactions with both manual and managed modes
+      - Nested buckets
+      - Supports registration of backend databases
+      - Comprehensive test coverage
+    - Replace the createencryptedwallet RPC with a wizard-style prompt
+      (--create) to create a new walletdb-backed wallet file and import keys
+      from the old Armory wallet file (if any)
+    - Transaction creation changes:
+      - Drop default transaction fee to 0.00001 BTC per kB
+      - Use standard script flags provided by the txscript package for
+        transaction creation and sanity checking
+      - Randomize change output index
+      - Includes amounts (total spendable, total needed, and fee) in all
+        insufficient funds errors
+    - Add support for simnet, the private simulation test network
+    - Implement the following Bitcoin Core RPCs:
+      - listreceivedbyaddress (#53)
+      - lockunspent, listlockunspent (#50, #55)
+      - getreceivedbyaddress
+      - listreceivedbyaccount
+    - Reimplement btcd RPCs which return the best block to use the block most
+      recently processed by wallet to avoid confirmation races:
+      - getbestblockhash
+      - getblockcount
+    - Perform clean shutdown on interrupt or when a stop RPC is received (#69)
+    - Throttle the number of connected HTTP POST and websocket client
+      connections (tunable using the rpcmaxclients and rpcmaxwebsockets config
+      options)
+    - Provide the ability to disable TLS when connecting to a localhost btcd or
+      serving localhost clients
+
+  - Rescan improvements:
+    - Add a rescan notification for when the rescan has completed and no more
+      rescan notifications are expected (#99)
+    - Use the most recent partial sync height from a rescan progress
+      notification when a rescan is restarted after the btcd connection is lost
+    - Force a rescan if the transaction store cannot be opened (due to a
+      missing file or if the deserialization failed)
+
+  - RPC compatibility improvements:
+    - Allow the use of the `*` account name to refer to all accounts
+    - Make the account parameter optional for the getbalance and
+      listalltransactions requests
+    - Add iswatchonly field to the validateaddress response result
+    - Check address equivalence in verifymessage by comparing pubkeys and pubkey
+      hashes rather than requiring the address being verified to be one
+      controlled by the wallet and using its private key for verification
+
+  - Bug fixes:
+    - Prevent an out-of-bounds panic when handling a gettransaction RPC.
+    - Prevent a panic on client disconnect (#110).
+    - Prevent double spending coins when creating multiple transactions at once
+      by serializing access to the transaction creation logic (#120)
+    - Mark unconfirmed transaction credits as spent when another unconfirmed
+      transaction spends one (#91)
+    - Exclude immature coinbase outputs from listunspent results (#103)
+    - Fix several data and logic races during sync with btcd (#101)
+    - Avoid a memory issue from incorrect slice usage which caused both
+      duplicate and missing blocks in the transaction store when middle
+      inserting transactions from a new block
+    - Only spend P2PKH outputs when creating sendfrom/sendmany/sendtoaddress
+      transactions (#89)
+    - Return the correct UTXO set when fetching all wallet UTXOs by fixing an
+      incorrect slice append
+    - Remove a deadlock caused by filling the btcd notification channel (#100)
+    - Avoid a confirmation race by using the most recently processed block in
+      RPC handlers, rather than using the most recently notified block by btcd
+    - Marshal empty JSON arrays as `[]` instead of the JSON `null` by using
+      empty, non-nil Go slices
+    - Flush logs and run all deferred functions before main returns and the
+      process exits
+    - Sync temporary transaction store flat file before closing and renaming
+    - Accept hex strings with an odd number of characters
+
+  - Notable developer-related changes:
+    - Switch from the go.net websocket package to gorilla websockets
+    - Refactor the RPC server:
+      - Move several global variables to the rpcServer struct
+      - Dynamically look up appropriate handlers for the current btcd connection
+        status and wallet sync state
+      - Begin creating websocket notifications by sending to one of many
+        notification channels in the rpcServer struct, which are in turn
+        marshalled and broadcast to each websocket client
+    - Separate the RPC client code into the chain package:
+      - Uses btcrpcclient for a btcd websocket RPC client
+      - Converts all notification callbacks to typed messages sent over channels
+      - Uses an unbounded queue for waiting notifications
+    - Import a new voting pool package (votingpool):
+      - Create and fetch voting pools and series from a walletdb namespace
+      - Generate deposit addresses utilizing m-of-n multisig P2SH scripts
+    - Improve transaction creation readability by splitting a monolithic
+      function into several smaller ones
+    - Check and handle all errors in some way, or explicitly comment why a
+      particular error was left unchecked
+    - Simplify RPC error handling by wrapping specific errors in unique types to
+      create an appropriate btcjson error before the response is marshalled
+    - Add a map of unspent outputs (keyed by outpoint) to the transaction store
+      for quick lookup of any UTXO and access to the full wallet UTXO set
+      without iterating over many transactions looking for unspent credits
+    - Modify several data structures and function signatures have been modified
+      to reduce the number of needed allocations and be more cache friendly
+
+  - Miscellaneous:
+    - Rewrite paths relative to the data directory when an alternate data
+      directory is provided on the command line
+    - Switch the websocket endpoint to `ws` to match btcd
+    - Remove the getaddressbalance extension RPC to discourage address reuse and
+      encourage watching for expected payments by using listunspent
+    - Increase transaction creation performance by moving the sorting of
+      transaction outputs by their amount out of an inner loop
+    - Add additional logging to the transaction store:
+      - Log each transaction added to the store
+      - Log each previously unconfirmed transaction that is mined
+      - [debug] Log which previous outputs are marked spent by a newly inserted
+        debiting transaction
+      - [debug] Log each transaction that is removed in a rollback
+    - Only log rollbacks if transactions are reorged out of the old chain
+    - Save logs to network-specific directories
+      (e.g. ~/.btcwallet/logs/testnet3) to match btcd behavior (#114)
+
 Changes in 0.4.0 (Sun May 25 2014)
   - Implement the following standard bitcoin server RPC requests:
-    - signmessage (https://github.com/btcsuite/btcwallet/issues/58)
-    - verifymessage (https://github.com/btcsuite/btcwallet/issues/61)
-    - listunspent (https://github.com/btcsuite/btcwallet/issues/54)
-    - validateaddress (https://github.com/btcsuite/btcwallet/issues/60)
-    - addressmultisig (https://github.com/btcsuite/btcwallet/issues/37)
-    - createmultisig (https://github.com/btcsuite/btcwallet/issues/37)
-    - signrawtransaction (https://github.com/btcsuite/btcwallet/issues/59)
+    - signmessage (https://github.com/ppcsuite/ppcwallet/issues/58)
+    - verifymessage (https://github.com/ppcsuite/ppcwallet/issues/61)
+    - listunspent (https://github.com/ppcsuite/ppcwallet/issues/54)
+    - validateaddress (https://github.com/ppcsuite/ppcwallet/issues/60)
+    - addressmultisig (https://github.com/ppcsuite/ppcwallet/issues/37)
+    - createmultisig (https://github.com/ppcsuite/ppcwallet/issues/37)
+    - signrawtransaction (https://github.com/ppcsuite/ppcwallet/issues/59)
 
   - Add authenticate extension RPC request to authenticate a websocket
     session without requiring the use of the HTTP Authorization header
@@ -35,14 +201,14 @@ Changes in 0.4.0 (Sun May 25 2014)
     to a length of 32
 
   - Fix rescan for transaction history for imported addresses
-    (https://github.com/btcsuite/btcwallet/issues/74)
+    (https://github.com/ppcsuite/ppcwallet/issues/74)
 
   - Fix listsinceblock request handler to consider the minimum confirmation
-    parameter (https://github.com/btcsuite/btcwallet/issues/80)
+    parameter (https://github.com/ppcsuite/ppcwallet/issues/80)
 
   - Fix several RPC handlers which require an unlocked wallet to check
     for an unlocked wallet before continuing
-    (https://github.com/btcsuite/btcwallet/issues/65)
+    (https://github.com/ppcsuite/ppcwallet/issues/65)
 
   - Fix handling for block rewards (coinbase transactions):
     - Update listtransactions results to use "generate" category for
@@ -100,13 +266,13 @@ Changes in 0.3.0 (Mon Feb 10 2014)
     the minimum fee to all outbound transactions
 
   - Implement the following standard bitcoin server RPC requests:
-    - getinfo (https://github.com/btcsuite/btcwallet/issues/63)
-    - getrawchangeaddress (https://github.com/btcsuite/btcwallet/issues/41)
-    - getreceivedbyaccount (https://github.com/btcsuite/btcwallet/issues/42)
-    - gettransaction (https://github.com/btcsuite/btcwallet/issues/44)
-    - keypoolrefill (https://github.com/btcsuite/btcwallet/issues/48)
-    - listsinceblock (https://github.com/btcsuite/btcwallet/issues/52)
-    - sendtoaddress (https://github.com/btcsuite/btcwallet/issues/56)
+    - getinfo (https://github.com/ppcsuite/ppcwallet/issues/63)
+    - getrawchangeaddress (https://github.com/ppcsuite/ppcwallet/issues/41)
+    - getreceivedbyaccount (https://github.com/ppcsuite/ppcwallet/issues/42)
+    - gettransaction (https://github.com/ppcsuite/ppcwallet/issues/44)
+    - keypoolrefill (https://github.com/ppcsuite/ppcwallet/issues/48)
+    - listsinceblock (https://github.com/ppcsuite/ppcwallet/issues/52)
+    - sendtoaddress (https://github.com/ppcsuite/ppcwallet/issues/56)
 
   - Add empty (unimplemented) handlers for the following RPC requests so
     requests are not passed down to btcd:
@@ -126,16 +292,16 @@ Changes in 0.3.0 (Mon Feb 10 2014)
   - Allow opening accounts with watching-only wallets
 
   - Return txid for sendfrom RPC requests
-    (https://github.com/btcsuite/btcwallet/issues/64)
+    (https://github.com/ppcsuite/ppcwallet/issues/64)
 
   - Rescan imported private keys in background
-    (https://github.com/btcsuite/btcwallet/issues/34)
+    (https://github.com/ppcsuite/ppcwallet/issues/34)
 
   - Do not import duplicate private keys
-    (https://github.com/btcsuite/btcwallet/issues/35)
+    (https://github.com/ppcsuite/ppcwallet/issues/35)
 
   - Write all three account files for a new account, rather than just
-    the wallet (https://github.com/btcsuite/btcwallet/issues/30)
+    the wallet (https://github.com/ppcsuite/ppcwallet/issues/30)
 
   - Create any missing directories before writing autogenerated certificate
     pair
@@ -163,7 +329,7 @@ Changes in 0.2.0 (Thu Jan 09 2014)
   - Don't hardcode localhost btcd connections.  Instead, add a --connect
     option to specify the hostname or address and port of a local or
     remote btcd instance
-    (https://github.com/btcsuite/btcwallet/issues/1)
+    (https://github.com/ppcsuite/ppcwallet/issues/1)
 
   - Remove --serverport port and replace with --listen.  This option works
     just like btcd's --rpclisten  and allows to specify the interfaces to
@@ -178,24 +344,24 @@ Changes in 0.2.0 (Thu Jan 09 2014)
     reorganizations while btcwallet was disconnected
 
   - Add support for the following standard bitcoin JSON-RPC calls:
-    - dumpprivkey (https://github.com/btcsuite/btcwallet/issues/9)
+    - dumpprivkey (https://github.com/ppcsuite/ppcwallet/issues/9)
     - getaccount
     - getaccountaddress
-    - importprivkey (https://github.com/btcsuite/btcwallet/issues/2)
-    - listtransactions (https://github.com/btcsuite/btcwallet/issues/12)
+    - importprivkey (https://github.com/ppcsuite/ppcwallet/issues/2)
+    - listtransactions (https://github.com/ppcsuite/ppcwallet/issues/12)
 
   - Add several extension RPC calls for websocket connections:
     - getaddressbalance: get the balance associated with a single address
     - getunconfirmedbalance: get total balance for unconfirmed transactions
     - listaddresstransactions: list transactions for a single address
-      (https://github.com/btcsuite/btcwallet/issues/27)
+      (https://github.com/ppcsuite/ppcwallet/issues/27)
     - listalltransactions: lists all transactions without specifying a range
 
   - Make RPC extensions available only to websocket connections, with the
     exception of createencryptedwallet
 
   - Add dummy handlers for unimplemented wallet RPC calls
-    (https://github.com/btcsuite/btcwallet/issues/29)
+    (https://github.com/ppcsuite/ppcwallet/issues/29)
 
   - Add socks5/tor proxy support
 
@@ -203,11 +369,11 @@ Changes in 0.2.0 (Thu Jan 09 2014)
 
   - Use OS-specific rename calls to provide atomic file renames which
     can replace a currently-existing file
-    (https://github.com/btcsuite/btcwallet/issues/20)
+    (https://github.com/ppcsuite/ppcwallet/issues/20)
 
   - Move account files to a single directory per bitcoin network to
     prevent a future scaling issue
-    (https://github.com/btcsuite/btcwallet/issues/16)
+    (https://github.com/ppcsuite/ppcwallet/issues/16)
 
   - Fix several data races and mutex mishandling
 
@@ -215,10 +381,10 @@ Changes in 0.2.0 (Thu Jan 09 2014)
     when a btcd connection was never established
 
   - Fix a bug where creating account files did not create all necessary
-    directories (https://github.com/btcsuite/btcwallet/issues/15)
+    directories (https://github.com/ppcsuite/ppcwallet/issues/15)
 
   - Fix a bug where '~' did not expand to a home or user directory
-    (https://github.com/btcsuite/btcwallet/issues/17)
+    (https://github.com/ppcsuite/ppcwallet/issues/17)
 
   - Fix a bug where returning account names as strings did not remove
     trailing ending 0s
