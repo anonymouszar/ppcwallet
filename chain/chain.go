@@ -219,16 +219,16 @@ func (c *Client) BlockStamp() (*waddrmgr.BlockStamp, error) {
 	}
 }
 
-// parseBlock parses a btcws definition of the block a tx is mined it to the
+// parseBlock parses a btcjson definition of the block a tx is mined it to the
 // Block structure of the txstore package, and the block index.  This is done
 // here since btcrpcclient doesn't parse this nicely for us.
 func parseBlock(block *btcjson.BlockDetails) (blk *txstore.Block, idx int, offset uint32, err error) { // ppc: tx offset return value added
 	if block == nil {
-		return nil, btcutil.TxIndexUnknown, btcutil.TxOffsetUnknown, nil
+		return nil, btcutil.TxIndexUnknown, btcutil.TxOffsetUnknown, nil // ppc:
 	}
 	blksha, err := wire.NewShaHashFromStr(block.Hash)
 	if err != nil {
-		return nil, btcutil.TxIndexUnknown, btcutil.TxOffsetUnknown, err
+		return nil, btcutil.TxIndexUnknown, btcutil.TxOffsetUnknown, err // ppc:
 	}
 	blk = &txstore.Block{
 		Height:              block.Height,
@@ -236,7 +236,7 @@ func parseBlock(block *btcjson.BlockDetails) (blk *txstore.Block, idx int, offse
 		Time:                time.Unix(block.Time, 0),
 		KernelStakeModifier: btcutil.KernelStakeModifierUnknown, // ppc:
 	}
-	return blk, block.Index, block.Offset, nil
+	return blk, block.Index, block.Offset, nil // ppc:
 }
 
 func (c *Client) onClientConnect() {
@@ -258,7 +258,7 @@ func (c *Client) onRecvTx(tx *btcutil.Tx, block *btcjson.BlockDetails) {
 	offset := btcutil.TxOffsetUnknown // ppc:
 	if block != nil {
 		var err error
-		blk, index, offset, err = parseBlock(block)
+		blk, index, offset, err = parseBlock(block) // ppc:
 		if err != nil {
 			// Log and drop improper notification.
 			log.Errorf("recvtx notification bad block: %v", err)
@@ -276,7 +276,7 @@ func (c *Client) onRedeemingTx(tx *btcutil.Tx, block *btcjson.BlockDetails) {
 	offset := btcutil.TxOffsetUnknown // ppc:
 	if block != nil {
 		var err error
-		blk, index, offset, err = parseBlock(block)
+		blk, index, offset, err = parseBlock(block) // ppc:
 		if err != nil {
 			// Log and drop improper notification.
 			log.Errorf("redeemingtx notification bad block: %v", err)
