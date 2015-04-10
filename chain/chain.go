@@ -306,8 +306,7 @@ func (c *Client) handler() {
 	}
 
 	// ppc:
-	proofOfStake := true
-	target, err := c.GetNextRequiredTarget(&proofOfStake)
+	target, err := c.GetNextRequiredTarget(ProofOfStakeTarget)
 	if err != nil {
 		close(c.quit)
 		c.wg.Done()
@@ -350,10 +349,9 @@ out:
 			if n, ok := next.(BlockConnected); ok {
 				bs = (*waddrmgr.BlockStamp)(&n)
 				// ppc: TODO(mably)
-				proofOfStake := true
-				target, err = c.GetNextRequiredTarget(&proofOfStake)
+				target, err = c.GetNextRequiredTarget(ProofOfStakeTarget)
 				if err == nil {
-					log.Infof("Next required target received: %v", target)
+					log.Infof("Next proof-of-stake required target: %v", target)
 				} else {
 					log.Errorf("Error getting next required target: %v", err)
 				}

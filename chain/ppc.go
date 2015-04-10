@@ -10,6 +10,10 @@ import (
 	"github.com/ppcsuite/ppcd/chaincfg"
 )
 
+const (
+	ProofOfStakeTarget bool = true
+)
+
 func (c *Client) Params() (*chaincfg.Params, error) {
 	return c.chainParams, nil
 }
