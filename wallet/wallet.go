@@ -339,13 +339,6 @@ func (w *Wallet) Start(chainServer *chain.Client) {
 	// ppc:
 	w.minter = newMinter(w)
 	go w.minter.Start()
-
-	go func() {
-		err := w.syncWithChain()
-		if err != nil && !w.ShuttingDown() {
-			log.Warnf("Unable to synchronize wallet to chain: %v", err)
-		}
-	}()
 }
 
 // Stop signals all wallet goroutines to shutdown.
