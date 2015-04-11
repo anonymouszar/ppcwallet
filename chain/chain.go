@@ -42,13 +42,6 @@ type Client struct {
 
 	currentTarget chan uint32 // ppc:
 
-	// Notification channels regarding the state of the client.  These exist
-	// so other components can listen in on chain activity.  These are
-	// initialized as nil, and must be created by calling one of the Listen*
-	// methods.
-	connected        chan bool
-	notificationLock sync.Locker
-
 	quit    chan struct{}
 	wg      sync.WaitGroup
 	started bool
@@ -299,17 +292,17 @@ func (c *Client) onRescanFinished(hash *wire.ShaHash, height int32, blkTime time
 // handler maintains a queue of notifications and the current state (best
 // block) of the chain.
 func (c *Client) handler() {
+	defer c.wg.Done()
+
 	hash, height, err := c.GetBestBlock()
 	if err != nil {
 		close(c.quit)
-		c.wg.Done()
 	}
 
 	// ppc:
 	target, err := c.GetNextRequiredTarget(ProofOfStakeTarget)
 	if err != nil {
 		close(c.quit)
-		c.wg.Done()
 	}
 
 	bs := &waddrmgr.BlockStamp{Hash: *hash, Height: height}
@@ -348,13 +341,25 @@ out:
 		case dequeue <- next:
 			if n, ok := next.(BlockConnected); ok {
 				bs = (*waddrmgr.BlockStamp)(&n)
+				log.Infof("BlockConnected: %v", bs.Height)
 				// ppc: TODO(mably)
-				target, err = c.GetNextRequiredTarget(ProofOfStakeTarget)
-				if err == nil {
-					log.Infof("Next proof-of-stake required target: %v", target)
-				} else {
-					log.Errorf("Error getting next required target: %v", err)
-				}
+				// http://godoc.org/github.com/btcsuite/btcrpcclient
+				// "In particular this means issuing a blocking RPC call from a
+				// callback handler will cause a deadlock as more server
+				// responses won't be read until the callback returns, but the
+				// callback would be waiting for a response. Thus, any
+				// additional RPCs must be issued an a completely decoupled
+				// manner."
+				go func() {
+					target, err = c.GetNextRequiredTarget(ProofOfStakeTarget)
+					if err == nil {
+						log.Infof(
+							"Next proof-of-stake required target: %v", target)
+					} else {
+						log.Errorf(
+							"Error getting next required target: %v", err)
+					}
+				}()
 			}
 
 			notifications[0] = nil
@@ -379,5 +384,4 @@ out:
 		}
 	}
 	close(c.dequeueNotification)
-	c.wg.Done()
 }
