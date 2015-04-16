@@ -318,6 +318,7 @@ func (c *Client) handler() {
 	enqueue := c.enqueueNotification
 	var dequeue chan interface{}
 	var next interface{}
+	newTarget := make(chan uint32) // ppc:
 out:
 	for {
 		select {
@@ -351,13 +352,11 @@ out:
 				// additional RPCs must be issued an a completely decoupled
 				// manner."
 				go func() {
-					target, err = c.GetNextRequiredTarget(ProofOfStakeTarget)
+					target, err := c.GetNextRequiredTarget(ProofOfStakeTarget)
 					if err == nil {
-						log.Infof(
-							"Next proof-of-stake required target: %v", target)
+						newTarget<- target
 					} else {
-						log.Errorf(
-							"Error getting next required target: %v", err)
+						log.Errorf("GetNextRequiredTarget failed: %v", err)
 					}
 				}()
 			}
@@ -377,7 +376,10 @@ out:
 
 		case c.currentBlock <- bs:
 
-		case c.currentTarget <- target:
+		case c.currentTarget <- target: // ppc:
+
+		case target = <-newTarget: // ppc:
+			log.Infof("New proof-of-stake required target received: %v", target)
 
 		case <-c.quit:
 			break out
