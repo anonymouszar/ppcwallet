@@ -342,7 +342,7 @@ out:
 		case dequeue <- next:
 			if n, ok := next.(BlockConnected); ok {
 				bs = (*waddrmgr.BlockStamp)(&n)
-				log.Infof("BlockConnected: %v", bs.Height)
+				log.Debugf("BlockConnected: %v", bs.Height)
 				// ppc: TODO(mably)
 				// http://godoc.org/github.com/btcsuite/btcrpcclient
 				// "In particular this means issuing a blocking RPC call from a
@@ -379,7 +379,7 @@ out:
 		case c.currentTarget <- target: // ppc:
 
 		case target = <-newTarget: // ppc:
-			log.Infof("New proof-of-stake required target received: %v", target)
+			log.Debugf("New proof-of-stake required target received: %v", target)
 
 		case <-c.quit:
 			break out
