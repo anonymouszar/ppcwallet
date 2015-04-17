@@ -354,7 +354,7 @@ out:
 				go func() {
 					target, err := c.GetNextRequiredTarget(ProofOfStakeTarget)
 					if err == nil {
-						newTarget<- target
+						newTarget <- target
 					} else {
 						log.Errorf("GetNextRequiredTarget failed: %v", err)
 					}

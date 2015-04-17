@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/btcutil/hdkeychain"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/txstore"

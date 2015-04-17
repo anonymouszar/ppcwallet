@@ -23,7 +23,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/chaincfg"
+	"github.com/ppcsuite/ppcd/txscript"
+	"github.com/ppcsuite/ppcwallet/txstore"
 	"github.com/ppcsuite/ppcwallet/votingpool"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/walletdb"

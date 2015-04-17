@@ -479,14 +479,14 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 			t.Fatalf("%s: got error: %v", test.name, err)
 		}
 		s = tmpStore
-		bal, err := s.Balance(1, TstRecvCurrentHeight)
+		bal, err := s.Balance(1, TstRecvCurrentHeight, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("%s: Confirmed Balance() failed: %v", test.name, err)
 		}
 		if bal != test.bal {
 			t.Fatalf("%s: balance mismatch: expected: %d, got: %d", test.name, test.bal, bal)
 		}
-		unc, err := s.Balance(0, TstRecvCurrentHeight)
+		unc, err := s.Balance(0, TstRecvCurrentHeight, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("%s: Unconfirmed Balance() failed: %v", test.name, err)
 		}
@@ -575,7 +575,7 @@ func TestFindingSpentCredits(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bal, err := s.Balance(1, TstSignedTxBlockDetails.Height)
+	bal, err := s.Balance(1, TstSignedTxBlockDetails.Height, &chaincfg.MainNetParams)
 	if err != nil {
 		t.Fatal(err)
 	}
