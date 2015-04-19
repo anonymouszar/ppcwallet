@@ -5,17 +5,27 @@
 package wallet
 
 import (
+	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
 	"github.com/kac-/umint"
 	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/ppcd/blockchain"
+	"github.com/ppcsuite/ppcd/btcec"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcutil"
 	"github.com/ppcsuite/ppcwallet/txstore"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
+)
+
+const (
+	nStakeSplitAge          = 60 * 60 * 24 * 90
+	nMaxStakeSearchInterval = int64(60)
 )
 
 type Minter struct {
@@ -86,6 +96,10 @@ func (m *Minter) mintBlocks() {
 
 	log.Tracef("Starting minting blocks worker")
 
+	//TODO(mably) static int64 nLastCoinStakeSearchTime = GetAdjustedTime();  // only initialized at startup
+	var nLastCoinStakeSearchTime int64 = time.Now().Unix()
+	var nLastCoinStakeSearchInterval int64 = 0
+
 out:
 	for {
 		// Quit when the miner is stopped.
@@ -106,8 +120,17 @@ out:
 			continue
 		}
 
-		searchTime := time.Now().Unix()
-		m.wallet.CreateCoinStake(searchTime)
+		nSearchTime := time.Now().Unix()
+		_, err := m.wallet.CreateCoinStake(
+			nSearchTime, nSearchTime-nLastCoinStakeSearchTime)
+		if err != nil {
+			log.Warnf("CoinStake error:\n %v", err)
+		}
+
+		nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime
+		nLastCoinStakeSearchTime = nSearchTime
+
+		log.Tracef("nLastCoinStakeSearchInterval: %v", nLastCoinStakeSearchInterval)
 
 		time.Sleep(time.Millisecond * 500)
 	}
@@ -124,7 +147,7 @@ func newMinter(w *Wallet) *Minter {
 	}
 }
 
-func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
+func (w *Wallet) CreateCoinStake(nSearchTime int64, nSearchInterval int64) (coinStakeTx *btcutil.Tx, err error) {
 
 	// Get current block's height and hash.
 	bs, err := w.chainSvr.BlockStamp()
@@ -132,7 +155,7 @@ func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
 		return
 	}
 
-	bits, err := w.chainSvr.CurrentTarget()
+	bits, err := w.chainSvr.CurrentProofOfStakeTarget()
 	if err != nil {
 		return
 	}
@@ -148,16 +171,12 @@ func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
 		return
 	}
 
-	txNew := wire.NewMsgTx()
-
-	nBalance, err := w.CalculateBalance(6)
-
-	nCredit := btcutil.Amount(0)
-	fKernelFound := false
-
 	nStakeMinAge := params.StakeMinAge
-	nMaxStakeSearchInterval := int64(60)
 	StakeMinAmount, _ := btcutil.NewAmount(1.0)
+
+	var fKernelFound bool = false
+	var foundStake txstore.Credit
+	var csTxTime int64
 
 	for _, eligible := range eligibles {
 		if w.ShuttingDown() {
@@ -171,7 +190,7 @@ func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
 		if eligible.Amount() < StakeMinAmount {
 			continue // only count coins meeting min amount requirement
 		}
-		if block.Time.Unix()+nStakeMinAge > txNew.Time.Unix()-nMaxStakeSearchInterval {
+		if block.Time.Unix()+nStakeMinAge > nSearchTime-nMaxStakeSearchInterval {
 			continue // only count coins meeting min age requirement
 		}
 		// Verify that block.KernelStakeModifier is defined
@@ -188,7 +207,8 @@ func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
 			}
 		}
 		tx := eligible.Tx()
-		for n := int64(0); n < 60 && !fKernelFound; n++ {
+		//for (unsigned int n=0; n<min(nSearchInterval,(int64)nMaxStakeSearchInterval) && !fKernelFound; n++)
+		for n := int64(0); n < minInt64(nSearchInterval, nMaxStakeSearchInterval) && !fKernelFound; n++ {
 			if w.ShuttingDown() {
 				return
 			}
@@ -208,8 +228,9 @@ func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
 				IsProtocolV03:  true,
 				StakeMinAge:    nStakeMinAge,
 				Bits:           bits,
-				TxTime:         fromTime - n,
+				TxTime:         nSearchTime - n,
 			}
+			// https://github.com/ppcoin/ppcoin/blob/develop/src/wallet.cpp#L1419
 			var success bool
 			_, success, err, _ = umint.CheckStakeKernelHash(&stpl)
 			if err != nil {
@@ -218,8 +239,12 @@ func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
 			}
 			if success {
 				log.Infof("Valid kernel hash found!")
-				// TODO create coinstake tx
-				nCredit += eligible.Amount()
+				log.Tracef("Eligible Tx: %v", eligible.Tx().Sha().String())
+				log.Tracef("Eligible Amount: %v", eligible.Amount())
+				log.Tracef("Eligible OP Hash: %v", eligible.OutPoint().Hash)
+				log.Tracef("Eligible OP Idx: %v", eligible.OutPoint().Index)
+				foundStake = eligible
+				csTxTime = nSearchTime - n
 				fKernelFound = true
 				break
 			}
@@ -229,10 +254,12 @@ func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
 		}
 	}
 
-	//log.Infof("Credit available: %v / %v", nCredit, nBalance)
-
-	if nCredit <= 0 || nCredit > nBalance {
-		return
+	if fKernelFound {
+		coinStakeTx, err = w.createCoinstakeTx(
+			foundStake, csTxTime, eligibles)
+		if err != nil {
+			return
+		}
 	}
 
 	// TODO to be continued...
@@ -240,7 +267,300 @@ func (w *Wallet) CreateCoinStake(fromTime int64) (err error) {
 	return
 }
 
-// TODO: ppc: default findEligibleOutputs filters by account
+// createCoinstakeTx returns a coinstake transaction paying an appropriate subsidy
+// based on the passed block height to the provided address.
+func (w *Wallet) createCoinstakeTx(stake txstore.Credit, txTime int64, eligibles []txstore.Credit) (*btcutil.Tx, error) {
+
+	var err error
+
+	var pkScript []byte
+	pkScript = stake.TxOut().PkScript
+
+	var scriptClass txscript.ScriptClass
+	var addrs []btcutil.Address
+	scriptClass, addrs, _, err =
+		txscript.ExtractPkScriptAddrs(pkScript, w.chainParams)
+	if err != nil {
+		return nil, err
+	}
+	if len(addrs) == 0 {
+		return nil, errors.New("failed to find a valid address")
+	}
+
+	switch scriptClass {
+	case txscript.PubKeyTy:
+	case txscript.PubKeyHashTy:
+		addr := addrs[0]
+		address, err := w.Manager.Address(addr)
+		if err != nil {
+			return nil, err
+		}
+		pka, ok := address.(waddrmgr.ManagedPubKeyAddress)
+		if !ok {
+			return nil, errors.New("address is not a pubkey address")
+		}
+		pkAddr, err := btcutil.NewAddressPubKey(
+			pka.PubKey().SerializeUncompressed(), w.chainParams)
+		if err != nil {
+			return nil, err
+		}
+		pkScript, err = txscript.PayToAddrScript(pkAddr)
+		if err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("no support for kernel type=%v", scriptClass)
+	}
+
+	lastPOWReward, err := w.chainSvr.Client.GetLastProofOfWorkReward()
+	if err != nil {
+		return nil, err
+	}
+	nCombineThreshold := btcutil.Amount(lastPOWReward / 3)
+	//nCombineThreshold = GetProofOfWorkReward(
+	//	GetLastBlockIndex(pindexBest, false)->nBits, w.chainParams) / 3
+
+	selectedCredits := make([]txstore.Credit, 0, len(eligibles))
+
+	nBalance, err := w.CalculateBalance(6)
+	nReserveBalance := btcutil.Amount(0)
+	nCredit := btcutil.Amount(0)
+
+	coinStakeTx := wire.NewMsgTx()
+
+	coinStakeTx.Time = time.Unix(txTime, 0) // coinStakeTx.nTime -= n;
+
+	//coinStakeTx.vout.push_back(CTxOut(0, scriptEmpty));
+	coinStakeTx.AddTxOut(&wire.TxOut{
+		Value:    0,
+		PkScript: []byte{}, //TODO(mably) empty byte array or nil?
+	})
+
+	//coinStakeTx.vin.push_back(CTxIn(pcoin.first->GetHash(), pcoin.second));
+	coinStakeTx.AddTxIn(&wire.TxIn{
+		PreviousOutPoint: *stake.OutPoint(),
+	})
+
+	selectedCredits = append(selectedCredits, stake) //vwtxPrev.push_back(pcoin.first);
+
+	//coinStakeTx.vout.push_back(CTxOut(0, scriptPubKeyOut));
+	coinStakeTx.AddTxOut(&wire.TxOut{
+		Value:    0,
+		PkScript: pkScript,
+	})
+	stakeBlock, err := stake.Block()
+	if err != nil {
+		return nil, err
+	}
+	//if (header.GetBlockTime() + nStakeSplitAge > coinStakeTx.nTime)
+	if stakeBlock.Time.Unix()+nStakeSplitAge > coinStakeTx.Time.Unix() {
+		//coinStakeTx.vout.push_back(CTxOut(0, scriptPubKeyOut)); //split stake
+		coinStakeTx.AddTxOut(&wire.TxOut{
+			Value:    0,
+			PkScript: pkScript,
+		})
+	}
+
+	nCredit += stake.Amount() // nCredit += pcoin.first->vout[pcoin.second].nValue;
+
+	for _, eligible := range eligibles {
+
+		// Attempt to add more inputs if no split stake
+		if len(coinStakeTx.TxOut) == 2 && !eligible.Tx().Sha().IsEqual(stake.Tx().Sha()) {
+			// Only add coins of the same key/address as kernel TODO(mably)
+			//&& ((pcoin.first->vout[pcoin.second].scriptPubKey == scriptPubKeyKernel || pcoin.first->vout[pcoin.second].scriptPubKey == coinStakeTx.vout[1].scriptPubKey))
+
+			// Stop adding more inputs if already too many inputs
+			if len(coinStakeTx.TxIn) >= 100 { // if (coinStakeTx.vin.size() >= 100)
+				break
+			}
+			// Stop adding more inputs if value is already pretty significant
+			if nCredit > nCombineThreshold { // (nCredit > nCombineThreshold)
+				break
+			}
+			// Stop adding inputs if reached reserve limit
+			if eligible.Amount() > nBalance-nReserveBalance { //(nCredit + pcoin.first->vout[pcoin.second].nValue > nBalance - nReserveBalance)
+				break
+			}
+			// Do not add additional significant input
+			if eligible.Amount() > nCombineThreshold { //(pcoin.first->vout[pcoin.second].nValue > nCombineThreshold)
+				continue
+			}
+			// Do not add input that is still too young
+			if eligible.Tx().MsgTx().Time.Add(time.Second * time.Duration(blockchain.StakeMaxAge)).After(coinStakeTx.Time) { //(pcoin.first->nTime + STAKE_MAX_AGE > coinStakeTx.nTime)
+				continue
+			}
+
+			coinStakeTx.AddTxIn(&wire.TxIn{
+				PreviousOutPoint: *eligible.OutPoint(),
+			})
+
+			//nCredit += pcoin.first->vout[pcoin.second].nValue;
+			nCredit += eligible.Amount()
+
+			//vwtxPrev.push_back(pcoin.first);
+			selectedCredits = append(selectedCredits, eligible)
+		}
+	}
+
+	// Calculate coin age reward
+	nCoinAge, err := getCoinAge(coinStakeTx, selectedCredits, w.chainParams)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Infof("Coin age : %v", nCoinAge)
+
+	nCredit += blockchain.PPCGetProofOfStakeReward(int64(nCoinAge))
+
+	log.Infof("Credit : %v", nCredit)
+
+	var nMinFee int64 = 0
+out:
+	for {
+		// Set output amount
+		if len(coinStakeTx.TxOut) == 3 {
+			coinStakeTx.TxOut[1].Value = ((int64(nCredit) - nMinFee) / 2 / blockchain.Cent) * blockchain.Cent
+			coinStakeTx.TxOut[2].Value = int64(nCredit) - nMinFee - coinStakeTx.TxOut[1].Value
+		} else {
+			coinStakeTx.TxOut[1].Value = int64(nCredit) - nMinFee
+		}
+
+		// Sign
+		w.signSelectedCredits(coinStakeTx, selectedCredits)
+
+		// Limit size
+		nBytes := coinStakeTx.SerializeSize()
+		if nBytes >= wire.MaxBlockPayloadGen/5 {
+			return nil, errors.New("CreateCoinStake : exceeded coinstake size limit")
+		}
+
+		// Check enough fee is paid
+		if nMinFee < blockchain.GetMinFee(coinStakeTx)-blockchain.MinTxFee {
+			nMinFee = blockchain.GetMinFee(coinStakeTx) - blockchain.MinTxFee
+			continue // try signing again
+		} else {
+			break out
+		}
+	}
+
+	return btcutil.NewTx(coinStakeTx), nil
+}
+
+func (w *Wallet) signSelectedCredits(msgTx *wire.MsgTx, eligibles []txstore.Credit) error {
+
+	// Set up our callbacks that we pass to txscript so it can
+	// look up the appropriate keys and scripts by address.
+	getKey := txscript.KeyClosure(func(addr btcutil.Address) (
+		*btcec.PrivateKey, bool, error) {
+		address, err := w.Manager.Address(addr)
+		if err != nil {
+			return nil, false, err
+		}
+
+		pka, ok := address.(waddrmgr.ManagedPubKeyAddress)
+		if !ok {
+			return nil, false, errors.New("address is not " +
+				"a pubkey address")
+		}
+
+		key, err := pka.PrivKey()
+		if err != nil {
+			return nil, false, err
+		}
+
+		return key, pka.Compressed(), nil
+	})
+
+	getScript := txscript.ScriptClosure(func(
+		addr btcutil.Address) ([]byte, error) {
+		address, err := w.Manager.Address(addr)
+		if err != nil {
+			return nil, err
+		}
+		sa, ok := address.(waddrmgr.ManagedScriptAddress)
+		if !ok {
+			return nil, errors.New("address is not a script" +
+				" address")
+		}
+
+		return sa.Script()
+	})
+
+	// All args collected. Now we can sign all the inputs that we can.
+	// `complete' denotes that we successfully signed all outputs and that
+	// all scripts will run to completion. This is returned as part of the
+	// reply.
+	complete := true
+	for i, eligible := range eligibles {
+		txIn := msgTx.TxIn[i]
+		input := eligible.TxOut().PkScript
+
+		script, err := txscript.SignTxOutput(w.chainParams,
+			msgTx, i, input, txscript.SigHashAll, getKey,
+			getScript, txIn.SignatureScript)
+		// Failure to sign isn't an error, it just means that
+		// the tx isn't complete.
+		if err != nil {
+			complete = false
+			continue
+		}
+		txIn.SignatureScript = script
+
+		// Either it was already signed or we just signed it.
+		// Find out if it is completely satisfied or still needs more.
+		engine, err := txscript.NewScript(txIn.SignatureScript, input,
+			i, msgTx, txscript.StandardVerifyFlags)
+		if err != nil || engine.Execute() != nil {
+			complete = false
+		}
+	}
+
+	if complete {
+		return nil
+	} else {
+		return errors.New("incomplete!")
+	}
+}
+
+// ppc:
+func getCoinAge(tx *wire.MsgTx, eligibles []txstore.Credit, chainParams *chaincfg.Params) (uint64, error) {
+
+	bnCentSecond := big.NewInt(0) // coin age in the unit of cent-seconds
+
+	nTime := tx.Time
+
+	for _, eligible := range eligibles {
+		txPrev := eligible.Tx()
+		txPrevTime := txPrev.MsgTx().Time
+		if nTime.Before(txPrevTime) {
+			err := fmt.Errorf("Transaction timestamp violation")
+			return 0, err // Transaction timestamp violation
+		}
+		txPrevBlock, err := eligible.Block()
+		if err != nil {
+			return 0, err
+		}
+		if txPrevBlock.Time.Add(time.Duration(chainParams.StakeMinAge) * time.Second).After(nTime) {
+			continue // only count coins meeting min age requirement
+		}
+
+		txOut := eligible.TxOut()
+		nValueIn := txOut.Value
+		bnCentSecond.Add(bnCentSecond,
+			new(big.Int).Div(new(big.Int).Mul(big.NewInt(nValueIn), big.NewInt((nTime.Unix()-txPrevTime.Unix()))),
+				big.NewInt(blockchain.Cent)))
+		log.Tracef("coin age nValueIn=%v nTimeDiff=%v bnCentSecond=%v", nValueIn, nTime.Unix()-txPrevTime.Unix(), bnCentSecond.String())
+	}
+
+	bnCoinDay := new(big.Int).Div(new(big.Int).Mul(bnCentSecond, big.NewInt(blockchain.Cent)),
+		big.NewInt(int64(blockchain.Coin)*24*60*60))
+	log.Tracef("coin age bnCoinDay=%v", bnCoinDay.String())
+
+	return bnCoinDay.Uint64(), nil
+}
+
+// TODO: ppc: btcwallet findEligibleOutputs method filters by account
 func (w *Wallet) ppcFindEligibleOutputs(minconf int, bs *waddrmgr.BlockStamp) ([]txstore.Credit, error) {
 	unspent, err := w.TxStore.UnspentOutputs()
 	if err != nil {
@@ -296,16 +616,17 @@ func (w *Wallet) FindStake(maxTime int64, diff float64) (foundStakes []FoundStak
 		return
 	}
 
-	bits, err := w.chainSvr.CurrentTarget()
+	posTarget, err := w.chainSvr.CurrentProofOfStakeTarget()
 	if err != nil {
 		return
 	}
 
 	if diff != 0 {
-		bits = umint.BigToCompact(ppcutil.DifficultyToTarget(diff))
+		posTarget = umint.BigToCompact(ppcutil.DifficultyToTarget(diff))
 	}
 
-	log.Infof("Required difficulty: %v (%v)", ppcutil.TargetToDifficulty(bits), bits)
+	log.Infof("Required difficulty: %v (%v)",
+		ppcutil.TargetToDifficulty(posTarget), posTarget)
 
 	eligibles, err := w.ppcFindEligibleOutputs(6, bs)
 
@@ -378,7 +699,7 @@ func (w *Wallet) FindStake(maxTime int64, diff float64) (foundStakes []FoundStak
 			PrevTxOutValue: int64(eligible.Amount()),
 			IsProtocolV03:  true,
 			StakeMinAge:    nStakeMinAge,
-			Bits:           bits,
+			Bits:           posTarget,
 			TxTime:         fromTime,
 		}
 
@@ -405,4 +726,11 @@ func (w *Wallet) FindStake(maxTime int64, diff float64) (foundStakes []FoundStak
 	}
 
 	return
+}
+
+func minInt64(a int64, b int64) int64 {
+	if a < b {
+		return a
+	}
+	return b
 }

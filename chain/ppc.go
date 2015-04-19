@@ -18,9 +18,9 @@ func (c *Client) Params() (*chaincfg.Params, error) {
 	return c.chainParams, nil
 }
 
-func (c *Client) CurrentTarget() (uint32, error) {
+func (c *Client) CurrentProofOfStakeTarget() (uint32, error) {
 	select {
-	case tgt := <-c.currentTarget:
+	case tgt := <-c.currentProofOfStakeTarget:
 		return tgt, nil
 	case <-c.quit:
 		return 0, errors.New("disconnected")

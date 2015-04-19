@@ -40,7 +40,7 @@ type Client struct {
 	dequeueNotification chan interface{}
 	currentBlock        chan *waddrmgr.BlockStamp
 
-	currentTarget chan uint32 // ppc:
+	currentProofOfStakeTarget chan uint32 // ppc:
 
 	quit    chan struct{}
 	wg      sync.WaitGroup
@@ -61,7 +61,7 @@ func NewClient(chainParams *chaincfg.Params, connect, user, pass string, certs [
 		dequeueNotification: make(chan interface{}),
 		currentBlock:        make(chan *waddrmgr.BlockStamp),
 		quit:                make(chan struct{}),
-		currentTarget:       make(chan uint32), // ppc:
+		currentProofOfStakeTarget: make(chan uint32), // ppc:
 	}
 	ntfnCallbacks := btcrpcclient.NotificationHandlers{
 		OnClientConnected:   client.onClientConnect,
@@ -300,7 +300,7 @@ func (c *Client) handler() {
 	}
 
 	// ppc:
-	target, err := c.GetNextRequiredTarget(ProofOfStakeTarget)
+	posTarget, err := c.GetNextRequiredTarget(ProofOfStakeTarget)
 	if err != nil {
 		close(c.quit)
 	}
@@ -318,7 +318,7 @@ func (c *Client) handler() {
 	enqueue := c.enqueueNotification
 	var dequeue chan interface{}
 	var next interface{}
-	newTarget := make(chan uint32) // ppc:
+	newPOSTarget := make(chan uint32) // ppc:
 out:
 	for {
 		select {
@@ -354,7 +354,7 @@ out:
 				go func() {
 					target, err := c.GetNextRequiredTarget(ProofOfStakeTarget)
 					if err == nil {
-						newTarget <- target
+						newPOSTarget <- target
 					} else {
 						log.Errorf("GetNextRequiredTarget failed: %v", err)
 					}
@@ -376,10 +376,10 @@ out:
 
 		case c.currentBlock <- bs:
 
-		case c.currentTarget <- target: // ppc:
+		case c.currentProofOfStakeTarget <- posTarget: // ppc:
 
-		case target = <-newTarget: // ppc:
-			log.Debugf("New proof-of-stake required target received: %v", target)
+		case posTarget = <-newPOSTarget: // ppc:
+			log.Debugf("New proof-of-stake required target received: %v", posTarget)
 
 		case <-c.quit:
 			break out
