@@ -120,11 +120,22 @@ out:
 			continue
 		}
 
+		var err error
+
+		bits, err := m.wallet.chainSvr.CurrentProofOfStakeTarget()
+		if err != nil {
+			log.Warnf("CurrentProofOfStakeTarget error:\n %v", err)
+			time.Sleep(time.Millisecond * 500)
+			continue
+		}
+
 		nSearchTime := time.Now().Unix()
-		_, err := m.wallet.CreateCoinStake(
+		_, err = m.wallet.CreateCoinStake(bits,
 			nSearchTime, nSearchTime-nLastCoinStakeSearchTime)
 		if err != nil {
 			log.Warnf("CoinStake error:\n %v", err)
+			time.Sleep(time.Millisecond * 500)
+			continue
 		}
 
 		nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime
@@ -147,15 +158,10 @@ func newMinter(w *Wallet) *Minter {
 	}
 }
 
-func (w *Wallet) CreateCoinStake(nSearchTime int64, nSearchInterval int64) (coinStakeTx *btcutil.Tx, err error) {
+func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval int64) (coinStakeTx *btcutil.Tx, err error) {
 
 	// Get current block's height and hash.
 	bs, err := w.chainSvr.BlockStamp()
-	if err != nil {
-		return
-	}
-
-	bits, err := w.chainSvr.CurrentProofOfStakeTarget()
 	if err != nil {
 		return
 	}
