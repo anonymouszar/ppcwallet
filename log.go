@@ -23,7 +23,7 @@ import (
 	"github.com/btcsuite/btclog"
 	"github.com/btcsuite/seelog"
 	"github.com/ppcsuite/ppcwallet/chain"
-	"github.com/ppcsuite/ppcwallet/txstore"
+	"github.com/ppcsuite/ppcwallet/legacy/txstore"
 	"github.com/ppcsuite/ppcwallet/wallet"
 )
 

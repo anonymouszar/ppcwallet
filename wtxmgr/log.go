@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Conformal Systems LLC <info@conformal.com>
+ * Copyright (c) 2013-2015 Conformal Systems LLC <info@conformal.com>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,20 +14,24 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  */
 
-package wallet
+package wtxmgr
 
-import (
-	"github.com/ppcsuite/ppcd/chaincfg"
-	"github.com/ppcsuite/ppcwallet/legacy/txstore"
-	"github.com/ppcsuite/ppcwallet/waddrmgr"
-	"github.com/ppcsuite/ppcwallet/walletdb"
-)
+import "github.com/btcsuite/btclog"
 
-// Config is a structure used to initialize a Wallet
-// All values are required for successfully opening a Wallet
-type Config struct {
-	ChainParams *chaincfg.Params
-	Db          *walletdb.DB
-	TxStore     *txstore.Store
-	Waddrmgr    *waddrmgr.Manager
+// log is a logger that is initialized with no output filters.  This
+// means the package will not perform any logging by default until the caller
+// requests it.
+var log = btclog.Disabled
+
+// DisableLog disables all library log output.  Logging output is disabled
+// by default until either UseLogger or SetLogWriter are called.
+func DisableLog() {
+	log = btclog.Disabled
+}
+
+// UseLogger uses a specified Logger to output package logging info.
+// This should be used in preference to SetLogWriter if the caller is also
+// using btclog.
+func UseLogger(logger btclog.Logger) {
+	log = logger
 }
