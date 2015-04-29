@@ -19,8 +19,8 @@ import (
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcutil"
-	"github.com/ppcsuite/ppcwallet/legacy/txstore"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
+	"github.com/ppcsuite/ppcwallet/wtxmgr"
 )
 
 const (
@@ -181,19 +181,16 @@ func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval
 	StakeMinAmount, _ := btcutil.NewAmount(1.0)
 
 	var fKernelFound bool = false
-	var foundStake txstore.Credit
+	var foundStake wtxmgr.Credit
 	var csTxTime int64
 
 	for _, eligible := range eligibles {
 		if w.ShuttingDown() {
 			return
 		}
-		var block *txstore.Block
-		block, err = eligible.Block()
-		if err != nil {
-			return
-		}
-		if eligible.Amount() < StakeMinAmount {
+		var block *wtxmgr.BlockMeta
+		block = &eligible.BlockMeta
+		if eligible.Amount < StakeMinAmount {
 			continue // only count coins meeting min amount requirement
 		}
 		if block.Time.Unix()+nStakeMinAge > nSearchTime-nMaxStakeSearchInterval {
@@ -209,10 +206,10 @@ func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval
 			} else {
 				log.Infof("Found kernel stake modifier for block %v: %v", &block.Hash, ksm)
 				block.KernelStakeModifier = ksm
-				w.TxStore.MarkDirty()
+				w.TxStore.UpdateBlockMeta(block)
 			}
 		}
-		tx := eligible.Tx()
+
 		//for (unsigned int n=0; n<min(nSearchInterval,(int64)nMaxStakeSearchInterval) && !fKernelFound; n++)
 		for n := int64(0); n < minInt64(nSearchInterval, nMaxStakeSearchInterval) && !fKernelFound; n++ {
 			if w.ShuttingDown() {
@@ -224,13 +221,13 @@ func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval
 				//StakeModifier:  utx.StakeModifier,
 				StakeModifier: block.KernelStakeModifier,
 				//PrevTxOffset:   utx.OffsetInBlock,
-				PrevTxOffset: tx.Offset(),
+				PrevTxOffset: eligible.Offset,
 				//PrevTxTime:     int64(utx.Time),
-				PrevTxTime: tx.MsgTx().Time.Unix(),
+				PrevTxTime: eligible.Received.Unix(),
 				//PrevTxOutIndex: outPoint.Index,
-				PrevTxOutIndex: eligible.OutputIndex,
+				PrevTxOutIndex: eligible.OutPoint.Index,
 				//PrevTxOutValue: int64(utx.Value),
-				PrevTxOutValue: int64(eligible.Amount()),
+				PrevTxOutValue: int64(eligible.Amount),
 				IsProtocolV03:  true,
 				StakeMinAge:    nStakeMinAge,
 				Bits:           bits,
@@ -245,10 +242,10 @@ func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval
 			}
 			if success {
 				log.Infof("Valid kernel hash found!")
-				log.Tracef("Eligible Tx: %v", eligible.Tx().Sha().String())
-				log.Tracef("Eligible Amount: %v", eligible.Amount())
-				log.Tracef("Eligible OP Hash: %v", eligible.OutPoint().Hash)
-				log.Tracef("Eligible OP Idx: %v", eligible.OutPoint().Index)
+				log.Tracef("Eligible Tx: %v", eligible.Hash.String())
+				log.Tracef("Eligible Amount: %v", eligible.Amount)
+				log.Tracef("Eligible OP Hash: %v", eligible.OutPoint.Hash)
+				log.Tracef("Eligible OP Idx: %v", eligible.OutPoint.Index)
 				foundStake = eligible
 				csTxTime = nSearchTime - n
 				fKernelFound = true
@@ -275,12 +272,12 @@ func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval
 
 // createCoinstakeTx returns a coinstake transaction paying an appropriate subsidy
 // based on the passed block height to the provided address.
-func (w *Wallet) createCoinstakeTx(stake txstore.Credit, txTime int64, eligibles []txstore.Credit) (*btcutil.Tx, error) {
+func (w *Wallet) createCoinstakeTx(stake wtxmgr.Credit, txTime int64, eligibles []wtxmgr.Credit) (*btcutil.Tx, error) {
 
 	var err error
 
 	var pkScript []byte
-	pkScript = stake.TxOut().PkScript
+	pkScript = stake.PkScript
 
 	var scriptClass txscript.ScriptClass
 	var addrs []btcutil.Address
@@ -326,7 +323,7 @@ func (w *Wallet) createCoinstakeTx(stake txstore.Credit, txTime int64, eligibles
 	//nCombineThreshold = GetProofOfWorkReward(
 	//	GetLastBlockIndex(pindexBest, false)->nBits, w.chainParams) / 3
 
-	selectedCredits := make([]txstore.Credit, 0, len(eligibles))
+	selectedCredits := make([]wtxmgr.Credit, 0, len(eligibles))
 
 	nBalance, err := w.CalculateBalance(6)
 	nReserveBalance := btcutil.Amount(0)
@@ -344,7 +341,7 @@ func (w *Wallet) createCoinstakeTx(stake txstore.Credit, txTime int64, eligibles
 
 	//coinStakeTx.vin.push_back(CTxIn(pcoin.first->GetHash(), pcoin.second));
 	coinStakeTx.AddTxIn(&wire.TxIn{
-		PreviousOutPoint: *stake.OutPoint(),
+		PreviousOutPoint: stake.OutPoint,
 	})
 
 	selectedCredits = append(selectedCredits, stake) //vwtxPrev.push_back(pcoin.first);
@@ -354,10 +351,7 @@ func (w *Wallet) createCoinstakeTx(stake txstore.Credit, txTime int64, eligibles
 		Value:    0,
 		PkScript: pkScript,
 	})
-	stakeBlock, err := stake.Block()
-	if err != nil {
-		return nil, err
-	}
+	stakeBlock := stake.BlockMeta
 	//if (header.GetBlockTime() + nStakeSplitAge > coinStakeTx.nTime)
 	if stakeBlock.Time.Unix()+nStakeSplitAge > coinStakeTx.Time.Unix() {
 		//coinStakeTx.vout.push_back(CTxOut(0, scriptPubKeyOut)); //split stake
@@ -367,12 +361,12 @@ func (w *Wallet) createCoinstakeTx(stake txstore.Credit, txTime int64, eligibles
 		})
 	}
 
-	nCredit += stake.Amount() // nCredit += pcoin.first->vout[pcoin.second].nValue;
+	nCredit += stake.Amount // nCredit += pcoin.first->vout[pcoin.second].nValue;
 
 	for _, eligible := range eligibles {
 
 		// Attempt to add more inputs if no split stake
-		if len(coinStakeTx.TxOut) == 2 && !eligible.Tx().Sha().IsEqual(stake.Tx().Sha()) {
+		if len(coinStakeTx.TxOut) == 2 && !eligible.Hash.IsEqual(&stake.Hash) {
 			// Only add coins of the same key/address as kernel TODO(mably)
 			//&& ((pcoin.first->vout[pcoin.second].scriptPubKey == scriptPubKeyKernel || pcoin.first->vout[pcoin.second].scriptPubKey == coinStakeTx.vout[1].scriptPubKey))
 
@@ -385,24 +379,24 @@ func (w *Wallet) createCoinstakeTx(stake txstore.Credit, txTime int64, eligibles
 				break
 			}
 			// Stop adding inputs if reached reserve limit
-			if eligible.Amount() > nBalance-nReserveBalance { //(nCredit + pcoin.first->vout[pcoin.second].nValue > nBalance - nReserveBalance)
+			if eligible.Amount > nBalance-nReserveBalance { //(nCredit + pcoin.first->vout[pcoin.second].nValue > nBalance - nReserveBalance)
 				break
 			}
 			// Do not add additional significant input
-			if eligible.Amount() > nCombineThreshold { //(pcoin.first->vout[pcoin.second].nValue > nCombineThreshold)
+			if eligible.Amount > nCombineThreshold { //(pcoin.first->vout[pcoin.second].nValue > nCombineThreshold)
 				continue
 			}
 			// Do not add input that is still too young
-			if eligible.Tx().MsgTx().Time.Add(time.Second * time.Duration(blockchain.StakeMaxAge)).After(coinStakeTx.Time) { //(pcoin.first->nTime + STAKE_MAX_AGE > coinStakeTx.nTime)
+			if eligible.Received.Add(time.Second * time.Duration(blockchain.StakeMaxAge)).After(coinStakeTx.Time) { //(pcoin.first->nTime + STAKE_MAX_AGE > coinStakeTx.nTime)
 				continue
 			}
 
 			coinStakeTx.AddTxIn(&wire.TxIn{
-				PreviousOutPoint: *eligible.OutPoint(),
+				PreviousOutPoint: eligible.OutPoint,
 			})
 
 			//nCredit += pcoin.first->vout[pcoin.second].nValue;
-			nCredit += eligible.Amount()
+			nCredit += eligible.Amount
 
 			//vwtxPrev.push_back(pcoin.first);
 			selectedCredits = append(selectedCredits, eligible)
@@ -453,7 +447,7 @@ out:
 	return btcutil.NewTx(coinStakeTx), nil
 }
 
-func (w *Wallet) signSelectedCredits(msgTx *wire.MsgTx, eligibles []txstore.Credit) error {
+func (w *Wallet) signSelectedCredits(msgTx *wire.MsgTx, eligibles []wtxmgr.Credit) error {
 
 	// Set up our callbacks that we pass to txscript so it can
 	// look up the appropriate keys and scripts by address.
@@ -500,7 +494,7 @@ func (w *Wallet) signSelectedCredits(msgTx *wire.MsgTx, eligibles []txstore.Cred
 	complete := true
 	for i, eligible := range eligibles {
 		txIn := msgTx.TxIn[i]
-		input := eligible.TxOut().PkScript
+		input := eligible.PkScript
 
 		script, err := txscript.SignTxOutput(w.chainParams,
 			msgTx, i, input, txscript.SigHashAll, getKey,
@@ -530,29 +524,24 @@ func (w *Wallet) signSelectedCredits(msgTx *wire.MsgTx, eligibles []txstore.Cred
 }
 
 // ppc:
-func getCoinAge(tx *wire.MsgTx, eligibles []txstore.Credit, chainParams *chaincfg.Params) (uint64, error) {
+func getCoinAge(tx *wire.MsgTx, eligibles []wtxmgr.Credit, chainParams *chaincfg.Params) (uint64, error) {
 
 	bnCentSecond := big.NewInt(0) // coin age in the unit of cent-seconds
 
 	nTime := tx.Time
 
 	for _, eligible := range eligibles {
-		txPrev := eligible.Tx()
-		txPrevTime := txPrev.MsgTx().Time
+		txPrevTime := eligible.Received
 		if nTime.Before(txPrevTime) {
 			err := fmt.Errorf("Transaction timestamp violation")
 			return 0, err // Transaction timestamp violation
 		}
-		txPrevBlock, err := eligible.Block()
-		if err != nil {
-			return 0, err
-		}
+		txPrevBlock := eligible.BlockMeta
 		if txPrevBlock.Time.Add(time.Duration(chainParams.StakeMinAge) * time.Second).After(nTime) {
 			continue // only count coins meeting min age requirement
 		}
 
-		txOut := eligible.TxOut()
-		nValueIn := txOut.Value
+		nValueIn := int64(eligible.Amount)
 		bnCentSecond.Add(bnCentSecond,
 			new(big.Int).Div(new(big.Int).Mul(big.NewInt(nValueIn), big.NewInt((nTime.Unix()-txPrevTime.Unix()))),
 				big.NewInt(blockchain.Cent)))
@@ -567,38 +556,51 @@ func getCoinAge(tx *wire.MsgTx, eligibles []txstore.Credit, chainParams *chaincf
 }
 
 // TODO: ppc: btcwallet findEligibleOutputs method filters by account
-func (w *Wallet) ppcFindEligibleOutputs(minconf int, bs *waddrmgr.BlockStamp) ([]txstore.Credit, error) {
+func (w *Wallet) ppcFindEligibleOutputs(minconf int32, bs *waddrmgr.BlockStamp) ([]wtxmgr.Credit, error) {
 	unspent, err := w.TxStore.UnspentOutputs()
 	if err != nil {
 		return nil, err
 	}
-	// Filter out unspendable outputs, that is, remove those that (at this
-	// time) are not P2PKH outputs.  Other inputs must be manually included
-	// in transactions and sent (for example, using createrawtransaction,
-	// signrawtransaction, and sendrawtransaction).
-	eligible := make([]txstore.Credit, 0, len(unspent))
+
+	// TODO: Eventually all of these filters (except perhaps output locking)
+	// should be handled by the call to UnspentOutputs (or similar).
+	// Because one of these filters requires matching the output script to
+	// the desired account, this change depends on making wtxmgr a waddrmgr
+	// dependancy and requesting unspent outputs for a single account.
+	eligible := make([]wtxmgr.Credit, 0, len(unspent))
 	for i := range unspent {
-		switch txscript.GetScriptClass(unspent[i].TxOut().PkScript) {
-		case txscript.PubKeyHashTy:
-			if !unspent[i].Confirmed(minconf, bs.Height) {
-				continue
-			}
-			// Coinbase transactions must have have reached maturity
-			// before their outputs may be spent.
-			if unspent[i].IsCoinbase() {
-				target := int(w.chainParams.CoinbaseMaturity)
-				if !unspent[i].Confirmed(target, bs.Height) {
-					continue
-				}
-			}
+		output := &unspent[i]
 
-			// Locked unspent outputs are skipped.
-			if w.LockedOutpoint(*unspent[i].OutPoint()) {
-				continue
-			}
-
-			eligible = append(eligible, unspent[i])
+		// Only include this output if it meets the required number of
+		// confirmations.  Coinbase transactions must have have reached
+		// maturity before their outputs may be spent.
+		if !confirmed(minconf, output.Height, bs.Height) {
+			continue
 		}
+		if output.FromCoinBase {
+			target := int32(w.chainParams.CoinbaseMaturity)
+			if !confirmed(target, output.Height, bs.Height) {
+				continue
+			}
+		}
+
+		// Locked unspent outputs are skipped.
+		if w.LockedOutpoint(output.OutPoint) {
+			continue
+		}
+
+		// Filter out unspendable outputs, that is, remove those that
+		// (at this time) are not P2PKH outputs.  Other inputs must be
+		// manually included in transactions and sent (for example,
+		// using createrawtransaction, signrawtransaction, and
+		// sendrawtransaction).
+		class, _, _, err := txscript.ExtractPkScriptAddrs(
+			output.PkScript, w.chainParams)
+		if err != nil || class != txscript.PubKeyHashTy {
+			continue
+		}
+
+		eligible = append(eligible, *output)
 	}
 	return eligible, nil
 }
@@ -655,12 +657,9 @@ func (w *Wallet) FindStake(maxTime int64, diff float64) (foundStakes []FoundStak
 		if w.ShuttingDown() {
 			return
 		}
-		var block *txstore.Block
-		block, err = eligible.Block()
-		if err != nil {
-			return
-		}
-		if eligible.Amount() < StakeMinAmount {
+		var block *wtxmgr.BlockMeta
+		block = &eligible.BlockMeta
+		if eligible.Amount < StakeMinAmount {
 			continue // only count coins meeting min amount requirement
 		}
 		if block.Time.Unix()+nStakeMinAge > fromTime-nMaxStakeSearchInterval {
@@ -676,19 +675,18 @@ func (w *Wallet) FindStake(maxTime int64, diff float64) (foundStakes []FoundStak
 			} else {
 				log.Infof("Found kernel stake modifier for block %v: %v", &block.Hash, ksm)
 				block.KernelStakeModifier = ksm
-				w.TxStore.MarkDirty()
+				w.TxStore.UpdateBlockMeta(block)
 			}
 		}
 
-		scriptClass, addresses, _, _ := eligible.Addresses(params)
+		scriptClass, addresses, _, _ := txscript.ExtractPkScriptAddrs(
+			eligible.PkScript, w.chainParams)
 		log.Infof("Addresses: %v (%v)", addresses, scriptClass)
 
-		tx := eligible.Tx()
-
 		log.Infof("CHECK %v PPCs from %v https://bkchain.org/ppc/tx/%v#o%v",
-			float64(eligible.Amount())/1000000.0,
-			time.Unix(int64(tx.MsgTx().Time.Unix()), 0).Format("2006-01-02"),
-			eligible.OutPoint().Hash, eligible.OutPoint().Index)
+			float64(eligible.Amount)/1000000.0,
+			time.Unix(int64(eligible.Received.Unix()), 0).Format("2006-01-02"),
+			eligible.OutPoint.Hash, eligible.OutPoint.Index)
 
 		stpl := umint.StakeKernelTemplate{
 			//BlockFromTime:  int64(utx.BlockTime),
@@ -696,13 +694,13 @@ func (w *Wallet) FindStake(maxTime int64, diff float64) (foundStakes []FoundStak
 			//StakeModifier:  utx.StakeModifier,
 			StakeModifier: block.KernelStakeModifier,
 			//PrevTxOffset:   utx.OffsetInBlock,
-			PrevTxOffset: tx.Offset(),
+			PrevTxOffset: eligible.Offset,
 			//PrevTxTime:     int64(utx.Time),
-			PrevTxTime: tx.MsgTx().Time.Unix(),
+			PrevTxTime: eligible.Received.Unix(),
 			//PrevTxOutIndex: outPoint.Index,
-			PrevTxOutIndex: eligible.OutputIndex,
+			PrevTxOutIndex: eligible.OutPoint.Index,
 			//PrevTxOutValue: int64(utx.Value),
-			PrevTxOutValue: int64(eligible.Amount()),
+			PrevTxOutValue: int64(eligible.Amount),
 			IsProtocolV03:  true,
 			StakeMinAge:    nStakeMinAge,
 			Bits:           posTarget,

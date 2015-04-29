@@ -23,8 +23,8 @@ import (
 	"github.com/btcsuite/btclog"
 	"github.com/btcsuite/seelog"
 	"github.com/ppcsuite/ppcwallet/chain"
-	"github.com/ppcsuite/ppcwallet/legacy/txstore"
 	"github.com/ppcsuite/ppcwallet/wallet"
+	"github.com/ppcsuite/ppcwallet/wtxmgr"
 )
 
 const (
@@ -44,7 +44,7 @@ var (
 	backendLog = seelog.Disabled
 	log        = btclog.Disabled
 	walletLog  = btclog.Disabled
-	txstLog    = btclog.Disabled
+	txmgrLog   = btclog.Disabled
 	chainLog   = btclog.Disabled
 )
 
@@ -52,7 +52,7 @@ var (
 var subsystemLoggers = map[string]btclog.Logger{
 	"BTCW": log,
 	"WLLT": walletLog,
-	"TXST": txstLog,
+	"TMGR": txmgrLog,
 	"CHNS": chainLog,
 }
 
@@ -87,8 +87,8 @@ func useLogger(subsystemID string, logger btclog.Logger) {
 		walletLog = logger
 		wallet.UseLogger(logger)
 	case "TXST":
-		txstLog = logger
-		txstore.UseLogger(logger)
+		txmgrLog = logger
+		wtxmgr.UseLogger(logger)
 	case "CHNS":
 		chainLog = logger
 		chain.UseLogger(logger)
@@ -99,16 +99,16 @@ func useLogger(subsystemID string, logger btclog.Logger) {
 // for all logging subsytems.
 func initSeelogLogger(logFile string) {
 	config := `
-        <seelog type="adaptive" mininterval="2000000" maxinterval="100000000"
-                critmsgcount="500" minlevel="trace">
-                <outputs formatid="all">
-                        <console />
-                        <rollingfile type="size" filename="%s" maxsize="10485760" maxrolls="3" />
-                </outputs>
-                <formats>
-                        <format id="all" format="%%Time %%Date [%%LEV] %%Msg%%n" />
-                </formats>
-        </seelog>`
+		<seelog type="adaptive" mininterval="2000000" maxinterval="100000000"
+				critmsgcount="500" minlevel="trace">
+				<outputs formatid="all">
+						<console />
+						<rollingfile type="size" filename="%s" maxsize="10485760" maxrolls="3" />
+				</outputs>
+				<formats>
+						<format id="all" format="%%Time %%Date [%%LEV] %%Msg%%n" />
+				</formats>
+		</seelog>`
 	config = fmt.Sprintf(config, logFile)
 
 	logger, err := seelog.LoggerFromConfigAsString(config)

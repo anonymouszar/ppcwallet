@@ -176,6 +176,18 @@ func valueBlockRecord(block *BlockMeta, txHash *wire.ShaHash) []byte {
 	return v
 }
 
+func updateBlockRecord(v []byte, block *BlockMeta) ([]byte, error) { // ppc:
+	if len(v) < 52 { // ppc:
+		str := fmt.Sprintf("%s: short read (expected %d bytes, read %d)",
+			bucketBlocks, 52, len(v))
+		return nil, storeError(ErrData, str, nil)
+	}
+	newv := append([]byte(nil), v...)
+	// ppc: peercoin block stake modifier for minting (8 bytes)
+	byteOrder.PutUint64(newv[40:48], block.KernelStakeModifier) // ppc:
+	return newv, nil
+}
+
 // appendRawBlockRecord returns a new block record value with a transaction
 // hash appended to the end and an incremented number of transactions.
 func appendRawBlockRecord(v []byte, txHash *wire.ShaHash) ([]byte, error) {
@@ -374,9 +386,8 @@ func (it *blockIterator) delete() error {
 //
 // The record value is serialized as such:
 //
-//   [0:8]   Received time (8 bytes)
-//   [8:12]  Offset within a block ppc:
-//   [12:]   Serialized transaction (varies) ppc:
+//   [0:4]  Offset within a block ppc:
+//   [4:]   Serialized transaction (varies) ppc:
 
 func keyTxRecord(txHash *wire.ShaHash, block *Block) []byte {
 	k := make([]byte, 68)
@@ -390,19 +401,18 @@ func valueTxRecord(rec *TxRecord) ([]byte, error) {
 	var v []byte
 	if rec.SerializedTx == nil {
 		txSize := rec.MsgTx.SerializeSize()
-		v = make([]byte, 12, 12+txSize)                     // ppc: 12
-		err := rec.MsgTx.Serialize(bytes.NewBuffer(v[12:])) // ppc: 12
+		v = make([]byte, 4, 4+txSize)                      // ppc: 4
+		err := rec.MsgTx.Serialize(bytes.NewBuffer(v[4:])) // ppc: 4
 		if err != nil {
 			str := fmt.Sprintf("unable to serialize transaction %v", rec.Hash)
 			return nil, storeError(ErrInput, str, err)
 		}
 		v = v[:cap(v)]
 	} else {
-		v = make([]byte, 12+len(rec.SerializedTx)) // ppc: 12
-		copy(v[12:], rec.SerializedTx)             // ppc: 12
+		v = make([]byte, 4+len(rec.SerializedTx)) // ppc: 4
+		copy(v[4:], rec.SerializedTx)             // ppc: 4
 	}
-	byteOrder.PutUint64(v[0:8], uint64(rec.Received.Unix())) // ppc: [0:8]
-	byteOrder.PutUint32(v[8:12], rec.Offset)                 // ppc: Offset
+	byteOrder.PutUint32(v[0:4], rec.Offset) // ppc: Offset
 	return v, nil
 }
 
@@ -430,15 +440,14 @@ func putRawTxRecord(ns walletdb.Bucket, k, v []byte) error {
 }
 
 func readRawTxRecord(txHash *wire.ShaHash, v []byte, rec *TxRecord) error {
-	if len(v) < 12 { // ppc: 12
+	if len(v) < 4 { // ppc: 4
 		str := fmt.Sprintf("%s: short read (expected %d bytes, read %d)",
-			bucketTxRecords, 12, len(v)) // ppc: 12
+			bucketTxRecords, 4, len(v)) // ppc: 4
 		return storeError(ErrData, str, nil)
 	}
 	rec.Hash = *txHash
-	rec.Received = time.Unix(int64(byteOrder.Uint64(v[0:8])), 0) // ppc: [0:8]
-	rec.Offset = byteOrder.Uint32(v[8:12])                       // ppc: Offset
-	err := rec.MsgTx.Deserialize(bytes.NewReader(v[12:]))        // ppc: 12
+	rec.Offset = byteOrder.Uint32(v[0:4])                // ppc: Offset
+	err := rec.MsgTx.Deserialize(bytes.NewReader(v[4:])) // ppc: 4
 	if err != nil {
 		str := fmt.Sprintf("%s: failed to deserialize transaction %v",
 			bucketTxRecords, txHash)

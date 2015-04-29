@@ -27,8 +27,8 @@ import (
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"
-	"github.com/ppcsuite/ppcwallet/legacy/txstore"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
+	"github.com/ppcsuite/ppcwallet/wtxmgr"
 )
 
 // Maximum tx size (in bytes). This should be the same as bitcoind's
@@ -235,7 +235,7 @@ type withdrawal struct {
 	status          *WithdrawalStatus
 	transactions    []*withdrawalTx
 	pendingRequests []OutputRequest
-	eligibleInputs  []Credit
+	eligibleInputs  []credit
 	current         *withdrawalTx
 }
 
@@ -263,7 +263,7 @@ func (o *withdrawalTxOut) pkScript() []byte {
 
 // withdrawalTx represents a transaction constructed by the withdrawal process.
 type withdrawalTx struct {
-	inputs  []Credit
+	inputs  []credit
 	outputs []*withdrawalTxOut
 	fee     btcutil.Amount
 
@@ -288,7 +288,7 @@ func (tx *withdrawalTx) ntxid() Ntxid {
 // inputTotal returns the sum amount of all inputs in this tx.
 func (tx *withdrawalTx) inputTotal() (total btcutil.Amount) {
 	for _, input := range tx.inputs {
-		total += input.Amount()
+		total += input.Amount
 	}
 	return total
 }
@@ -319,7 +319,7 @@ func (tx *withdrawalTx) toMsgTx() *wire.MsgTx {
 	}
 
 	for _, i := range tx.inputs {
-		msgtx.AddTxIn(wire.NewTxIn(i.OutPoint(), []byte{}))
+		msgtx.AddTxIn(wire.NewTxIn(&i.OutPoint, []byte{}))
 	}
 	return msgtx
 }
@@ -339,16 +339,16 @@ func (tx *withdrawalTx) removeOutput() *withdrawalTxOut {
 }
 
 // addInput adds a new input to this transaction.
-func (tx *withdrawalTx) addInput(input Credit) {
-	log.Debugf("Added tx input with amount %v", input.Amount())
+func (tx *withdrawalTx) addInput(input credit) {
+	log.Debugf("Added tx input with amount %v", input.Amount)
 	tx.inputs = append(tx.inputs, input)
 }
 
 // removeInput removes the last added input and returns it.
-func (tx *withdrawalTx) removeInput() Credit {
+func (tx *withdrawalTx) removeInput() credit {
 	removed := tx.inputs[len(tx.inputs)-1]
 	tx.inputs = tx.inputs[:len(tx.inputs)-1]
-	log.Debugf("Removed tx input with amount %v", removed.Amount())
+	log.Debugf("Removed tx input with amount %v", removed.Amount)
 	return removed
 }
 
@@ -378,7 +378,7 @@ func (tx *withdrawalTx) addChange(pkScript []byte) bool {
 //
 // The tx needs to have two or more outputs. The case with only one output must
 // be handled separately (by the split output procedure).
-func (tx *withdrawalTx) rollBackLastOutput() ([]Credit, *withdrawalTxOut, error) {
+func (tx *withdrawalTx) rollBackLastOutput() ([]credit, *withdrawalTxOut, error) {
 	// Check precondition: At least two outputs are required in the transaction.
 	if len(tx.outputs) < 2 {
 		str := fmt.Sprintf("at least two outputs expected; got %d", len(tx.outputs))
@@ -387,7 +387,7 @@ func (tx *withdrawalTx) rollBackLastOutput() ([]Credit, *withdrawalTxOut, error)
 
 	removedOutput := tx.removeOutput()
 
-	var removedInputs []Credit
+	var removedInputs []credit
 	// Continue until sum(in) < sum(out) + fee
 	for tx.inputTotal() >= tx.outputTotal()+calculateTxFee(tx) {
 		removedInputs = append(removedInputs, tx.removeInput())
@@ -399,7 +399,7 @@ func (tx *withdrawalTx) rollBackLastOutput() ([]Credit, *withdrawalTxOut, error)
 	return removedInputs, removedOutput, nil
 }
 
-func newWithdrawal(roundID uint32, requests []OutputRequest, inputs []Credit,
+func newWithdrawal(roundID uint32, requests []OutputRequest, inputs []credit,
 	changeStart ChangeAddress) *withdrawal {
 	outputs := make(map[OutBailmentID]*WithdrawalOutput, len(requests))
 	for _, request := range requests {
@@ -427,7 +427,7 @@ func newWithdrawal(roundID uint32, requests []OutputRequest, inputs []Credit,
 // found at http://opentransactions.org/wiki/index.php/Startwithdrawal
 func (p *Pool) StartWithdrawal(roundID uint32, requests []OutputRequest,
 	startAddress WithdrawalAddress, lastSeriesID uint32, changeStart ChangeAddress,
-	txStore *txstore.Store, chainHeight int32, dustThreshold btcutil.Amount) (
+	txStore *wtxmgr.Store, chainHeight int32, dustThreshold btcutil.Amount) (
 	*WithdrawalStatus, error) {
 
 	eligible, err := p.getEligibleInputs(txStore, startAddress, lastSeriesID, dustThreshold,
@@ -463,7 +463,7 @@ func (w *withdrawal) pushRequest(request OutputRequest) {
 
 // popInput removes and returns the first input from the stack of eligible
 // inputs.
-func (w *withdrawal) popInput() Credit {
+func (w *withdrawal) popInput() credit {
 	input := w.eligibleInputs[0]
 	w.eligibleInputs = w.eligibleInputs[1:]
 	return input
@@ -473,8 +473,8 @@ func (w *withdrawal) popInput() Credit {
 // TODO: Reverse the stack semantics here as the current one generates a lot of
 // extra garbage since it always creates a new single-element slice and append
 // the rest of the items to it.
-func (w *withdrawal) pushInput(input Credit) {
-	w.eligibleInputs = append([]Credit{input}, w.eligibleInputs...)
+func (w *withdrawal) pushInput(input credit) {
+	w.eligibleInputs = append([]credit{input}, w.eligibleInputs...)
 }
 
 // If this returns it means we have added an output and the necessary inputs to fulfil that
@@ -597,7 +597,7 @@ func (w *withdrawal) finalizeCurrentTx() error {
 func (w *withdrawal) maybeDropRequests() {
 	inputAmount := btcutil.Amount(0)
 	for _, input := range w.eligibleInputs {
-		inputAmount += input.Amount()
+		inputAmount += input.Amount
 	}
 	outputAmount := btcutil.Amount(0)
 	for _, request := range w.pendingRequests {
@@ -715,7 +715,7 @@ func getRawSigs(transactions []*withdrawalTx) (map[Ntxid]TxSigs, error) {
 		msgtx := tx.toMsgTx()
 		ntxid := tx.ntxid()
 		for inputIdx, input := range tx.inputs {
-			creditAddr := input.Address()
+			creditAddr := input.addr
 			redeemScript := creditAddr.redeemScript()
 			series := creditAddr.series()
 			// The order of the raw signatures in the signature script must match the
@@ -767,10 +767,19 @@ func getRawSigs(transactions []*withdrawalTx) (map[Ntxid]TxSigs, error) {
 // manager) the redeem script for each of them and constructing the signature
 // script using that and the given raw signatures.
 // This function must be called with the manager unlocked.
-func SignTx(msgtx *wire.MsgTx, sigs TxSigs, mgr *waddrmgr.Manager, store *txstore.Store) error {
-	credits, err := store.FindPreviousCredits(btcutil.NewTx(msgtx))
-	for i, credit := range credits {
-		if err = signMultiSigUTXO(mgr, msgtx, i, credit.TxOut().PkScript, sigs[i]); err != nil {
+func SignTx(msgtx *wire.MsgTx, sigs TxSigs, mgr *waddrmgr.Manager, store *wtxmgr.Store) error {
+	// We use time.Now() here as we're not going to store the new TxRecord
+	// anywhere -- we just need it to pass to store.PreviousPkScripts().
+	rec, err := wtxmgr.NewTxRecordFromMsgTx(msgtx) // ppc:
+	if err != nil {
+		return newError(ErrTxSigning, "failed to construct TxRecord for signing", err)
+	}
+	pkScripts, err := store.PreviousPkScripts(rec, nil)
+	if err != nil {
+		return newError(ErrTxSigning, "failed to obtain pkScripts for signing", err)
+	}
+	for i, pkScript := range pkScripts {
+		if err = signMultiSigUTXO(mgr, msgtx, i, pkScript, sigs[i]); err != nil {
 			return err
 		}
 	}
@@ -893,7 +902,7 @@ var calculateTxSize = func(tx *withdrawalTx) int {
 		// Notice that we use 73 as the signature length as that's the maximum
 		// length they may have:
 		// https://en.bitcoin.it/wiki/Elliptic_Curve_Digital_Signature_Algorithm
-		addr := tx.inputs[i].Address()
+		addr := tx.inputs[i].addr
 		redeemScriptLen := len(addr.redeemScript())
 		n := wire.VarIntSerializeSize(uint64(redeemScriptLen))
 		sigScriptLen := 1 + (74 * int(addr.series().reqSigs)) + redeemScriptLen + 1 + n

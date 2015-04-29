@@ -26,11 +26,11 @@ import (
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/txscript"
-	"github.com/ppcsuite/ppcwallet/legacy/txstore"
 	"github.com/ppcsuite/ppcwallet/votingpool"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/walletdb"
 	_ "github.com/ppcsuite/ppcwallet/walletdb/bdb"
+	"github.com/ppcsuite/ppcwallet/wtxmgr"
 )
 
 var (
@@ -166,8 +166,7 @@ func Example_empowerSeries() {
 	//
 }
 
-// This example demonstrates how to empower a series by loading the private
-// key for one of the series' public keys.
+// This example demonstrates how to use the Pool.StartWithdrawal method.
 func Example_startWithdrawal() {
 	// Create the address manager and votingpool DB namespace. See the example
 	// for the Create() function for more info on how this is done.
@@ -319,11 +318,22 @@ func exampleCreatePoolAndSeries(mgr *waddrmgr.Manager, vpNamespace walletdb.Name
 	return pool, seriesID, nil
 }
 
-func exampleCreateTxStore() (*txstore.Store, func(), error) {
-	dir, err := ioutil.TempDir("", "tx.bin")
+func exampleCreateTxStore() (*wtxmgr.Store, func(), error) {
+	dir, err := ioutil.TempDir("", "pool_test_txstore")
 	if err != nil {
 		return nil, nil, err
 	}
-	s := txstore.New(dir)
+	db, err := walletdb.Create("bdb", filepath.Join(dir, "txstore.db"))
+	if err != nil {
+		return nil, nil, err
+	}
+	wtxmgrNamespace, err := db.Namespace([]byte("testtxstore"))
+	if err != nil {
+		return nil, nil, err
+	}
+	s, err := wtxmgr.Create(wtxmgrNamespace)
+	if err != nil {
+		return nil, nil, err
+	}
 	return s, func() { os.RemoveAll(dir) }, nil
 }

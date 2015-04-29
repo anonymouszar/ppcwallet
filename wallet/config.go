@@ -18,9 +18,9 @@ package wallet
 
 import (
 	"github.com/ppcsuite/ppcd/chaincfg"
-	"github.com/ppcsuite/ppcwallet/legacy/txstore"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/walletdb"
+	"github.com/ppcsuite/ppcwallet/wtxmgr"
 )
 
 // Config is a structure used to initialize a Wallet
@@ -28,6 +28,6 @@ import (
 type Config struct {
 	ChainParams *chaincfg.Params
 	Db          *walletdb.DB
-	TxStore     *txstore.Store
+	TxStore     *wtxmgr.Store
 	Waddrmgr    *waddrmgr.Manager
 }

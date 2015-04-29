@@ -88,9 +88,9 @@ type credit struct {
 
 // TxRecord represents a transaction managed by the Store.
 type TxRecord struct {
-	MsgTx        wire.MsgTx
-	Hash         wire.ShaHash
-	Received     time.Time
+	MsgTx wire.MsgTx
+	Hash  wire.ShaHash
+	//Received     time.Time ppc:
 	Offset       uint32 // ppc: Offset within a block or btcutil.TxOffsetUnknown
 	SerializedTx []byte // Optional: may be nil
 }
@@ -98,10 +98,10 @@ type TxRecord struct {
 // NewTxRecord creates a new transaction record that may be inserted into the
 // store.  It uses memoization to save the transaction hash and the serialized
 // transaction.
-func NewTxRecord(serializedTx []byte, received time.Time, offset uint32) (*TxRecord, error) { // ppc:
+func NewTxRecord(serializedTx []byte) (*TxRecord, error) { // ppc:
 	rec := &TxRecord{
-		Received:     received,
-		Offset:       offset, // ppc:
+		//Received:     received, ppc:
+		Offset:       btcutil.TxOffsetUnknown, // ppc:
 		SerializedTx: serializedTx,
 	}
 	err := rec.MsgTx.Deserialize(bytes.NewReader(serializedTx))
@@ -115,7 +115,7 @@ func NewTxRecord(serializedTx []byte, received time.Time, offset uint32) (*TxRec
 
 // NewTxRecordFromMsgTx creates a new transaction record that may be inserted
 // into the store.
-func NewTxRecordFromMsgTx(msgTx *wire.MsgTx, received time.Time, offset uint32) (*TxRecord, error) { // ppc:
+func NewTxRecordFromMsgTx(msgTx *wire.MsgTx) (*TxRecord, error) { // ppc:
 	buf := bytes.NewBuffer(make([]byte, 0, msgTx.SerializeSize()))
 	err := msgTx.Serialize(buf)
 	if err != nil {
@@ -123,9 +123,9 @@ func NewTxRecordFromMsgTx(msgTx *wire.MsgTx, received time.Time, offset uint32) 
 		return nil, storeError(ErrInput, str, err)
 	}
 	rec := &TxRecord{
-		MsgTx:        *msgTx,
-		Received:     received,
-		Offset:       offset, // ppc:
+		MsgTx: *msgTx,
+		//Received:     msgTx.Time, ppc:
+		Offset:       btcutil.TxOffsetUnknown, // ppc:
 		SerializedTx: buf.Bytes(),
 	}
 	copy(rec.Hash[:], wire.DoubleSha256(rec.SerializedTx))
@@ -740,6 +740,7 @@ func (s *Store) unspentOutputs(ns walletdb.Bucket) ([]Credit, error) {
 		// TODO(jrick): reading the entire transaction should
 		// be avoidable.  Creating the credit only requires the
 		// output amount and pkScript.
+		// ppc: we need time and offset too.
 		rec, err := fetchTxRecord(ns, &op.Hash, &block)
 		if err != nil {
 			return err
@@ -754,7 +755,8 @@ func (s *Store) unspentOutputs(ns walletdb.Bucket) ([]Credit, error) {
 			},
 			Amount:       btcutil.Amount(txOut.Value),
 			PkScript:     txOut.PkScript,
-			Received:     rec.Received,
+			Received:     rec.MsgTx.Time,                      // ppc:
+			Offset:       rec.Offset,                          // ppc:
 			FromCoinBase: blockchain.IsCoinBaseTx(&rec.MsgTx), // ppc: TODO(mably)
 		}
 		unspent = append(unspent, cred)
@@ -797,7 +799,8 @@ func (s *Store) unspentOutputs(ns walletdb.Bucket) ([]Credit, error) {
 			},
 			Amount:       btcutil.Amount(txOut.Value),
 			PkScript:     txOut.PkScript,
-			Received:     rec.Received,
+			Received:     rec.MsgTx.Time,                      // ppc:
+			Offset:       rec.Offset,                          // ppc:
 			FromCoinBase: blockchain.IsCoinBaseTx(&rec.MsgTx), // TODO(mably) ppc:
 		}
 		unspent = append(unspent, cred)
