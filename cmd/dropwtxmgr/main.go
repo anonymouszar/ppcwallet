@@ -20,10 +20,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/btcsuite/btcutil"
-	"github.com/btcsuite/btcwallet/walletdb"
-	_ "github.com/btcsuite/btcwallet/walletdb/bdb"
 	"github.com/btcsuite/go-flags"
+	"github.com/ppcsuite/btcutil"
+	"github.com/ppcsuite/ppcwallet/walletdb"
+	_ "github.com/ppcsuite/ppcwallet/walletdb/bdb"
 )
 
 const defaultNet = "mainnet"
