@@ -147,7 +147,7 @@ func (s outputStatus) String() string {
 }
 
 func (tx *changeAwareTx) addSelfToStore(store *wtxmgr.Store) error {
-	rec, err := wtxmgr.NewTxRecordFromMsgTx(tx.MsgTx, time.Now())
+	rec, err := wtxmgr.NewTxRecordFromMsgTx(tx.MsgTx)
 	if err != nil {
 		return newError(ErrWithdrawalTxStorage, "error constructing TxRecord for storing", err)
 	}
