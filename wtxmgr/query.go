@@ -71,6 +71,11 @@ func (s *Store) minedTxDetails(ns walletdb.Bucket, txHash *wire.ShaHash, recKey,
 	if err != nil {
 		return nil, err
 	}
+	details.Block.KernelStakeModifier, err =
+		fetchBlockKernelStakeModifier(ns, details.Block.Height)
+	if err != nil {
+		return nil, err
+	}
 
 	credIter := makeCreditIterator(ns, recKey)
 	for credIter.next() {

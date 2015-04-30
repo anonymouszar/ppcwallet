@@ -90,7 +90,7 @@ type credit struct {
 type TxRecord struct {
 	MsgTx wire.MsgTx
 	Hash  wire.ShaHash
-	//Received     time.Time ppc:
+	//Received     time.Time ppc: already present in msgtx
 	Offset       uint32 // ppc: Offset within a block or btcutil.TxOffsetUnknown
 	SerializedTx []byte // Optional: may be nil
 }
