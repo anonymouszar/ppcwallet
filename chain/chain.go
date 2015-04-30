@@ -248,7 +248,7 @@ func (c *Client) onRecvTx(tx *btcutil.Tx, block *btcjson.BlockDetails) {
 		return
 	}
 
-	rec, err := wtxmgr.PPCNewTxRecordFromTx(tx)
+	rec, err := wtxmgr.PPCNewTxRecordFromTx(tx) // ppc:
 	if err != nil {
 		log.Errorf("Cannot create transaction record for relevant "+
 			"tx: %v", err)

@@ -336,7 +336,7 @@ func (w *Wallet) findEligibleOutputs(account uint32, minconf int32, bs *waddrmgr
 		if !confirmed(minconf, output.Height, bs.Height) {
 			continue
 		}
-		if output.FromCoinBase {
+		if output.FromCoinBase || output.FromCoinStake { // ppc:
 			target := int32(w.chainParams.CoinbaseMaturity)
 			if !confirmed(target, output.Height, bs.Height) {
 				continue

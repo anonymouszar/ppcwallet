@@ -138,11 +138,12 @@ func NewTxRecordFromMsgTx(msgTx *wire.MsgTx) (*TxRecord, error) { // ppc:
 type Credit struct {
 	wire.OutPoint
 	BlockMeta
-	Amount       btcutil.Amount
-	PkScript     []byte
-	Received     time.Time
-	Offset       uint32 // ppc:
-	FromCoinBase bool
+	Amount        btcutil.Amount
+	PkScript      []byte
+	Received      time.Time
+	Offset        uint32 // ppc:
+	FromCoinBase  bool
+	FromCoinStake bool
 }
 
 // Store implements a transaction store for storing and managing wallet
@@ -753,11 +754,12 @@ func (s *Store) unspentOutputs(ns walletdb.Bucket) ([]Credit, error) {
 				Time:                blockTime,
 				KernelStakeModifier: blockKernelStakeModifier, // ppc:
 			},
-			Amount:       btcutil.Amount(txOut.Value),
-			PkScript:     txOut.PkScript,
-			Received:     rec.MsgTx.Time,                      // ppc:
-			Offset:       rec.Offset,                          // ppc:
-			FromCoinBase: blockchain.IsCoinBaseTx(&rec.MsgTx), // ppc: TODO(mably)
+			Amount:        btcutil.Amount(txOut.Value),
+			PkScript:      txOut.PkScript,
+			Received:      rec.MsgTx.Time,                       // ppc:
+			Offset:        rec.Offset,                           // ppc:
+			FromCoinBase:  blockchain.IsCoinBaseTx(&rec.MsgTx),  // ppc:
+			FromCoinStake: blockchain.IsCoinStakeTx(&rec.MsgTx), // ppc:
 		}
 		unspent = append(unspent, cred)
 		return nil
@@ -797,11 +799,12 @@ func (s *Store) unspentOutputs(ns walletdb.Bucket) ([]Credit, error) {
 			BlockMeta: BlockMeta{
 				Block: Block{Height: -1},
 			},
-			Amount:       btcutil.Amount(txOut.Value),
-			PkScript:     txOut.PkScript,
-			Received:     rec.MsgTx.Time,                      // ppc:
-			Offset:       rec.Offset,                          // ppc:
-			FromCoinBase: blockchain.IsCoinBaseTx(&rec.MsgTx), // TODO(mably) ppc:
+			Amount:        btcutil.Amount(txOut.Value),
+			PkScript:      txOut.PkScript,
+			Received:      rec.MsgTx.Time,                       // ppc:
+			Offset:        rec.Offset,                           // ppc:
+			FromCoinBase:  blockchain.IsCoinBaseTx(&rec.MsgTx),  // ppc:
+			FromCoinStake: blockchain.IsCoinStakeTx(&rec.MsgTx), // ppc:
 		}
 		unspent = append(unspent, cred)
 		return nil

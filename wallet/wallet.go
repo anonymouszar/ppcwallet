@@ -754,7 +754,7 @@ func (w *Wallet) CalculateAccountBalance(account uint32, confirms int32) (btcuti
 		if !confirmed(confirms, output.Height, syncBlock.Height) {
 			continue
 		}
-		if output.FromCoinBase {
+		if output.FromCoinBase || output.FromCoinStake { // ppc:
 			target := int32(w.chainParams.CoinbaseMaturity)
 			if !confirmed(target, output.Height, syncBlock.Height) {
 				continue
@@ -1152,7 +1152,7 @@ func (w *Wallet) ListUnspent(minconf, maxconf int32,
 		}
 
 		// Only mature coinbase outputs are included.
-		if output.FromCoinBase {
+		if output.FromCoinBase || output.FromCoinStake { // ppc:
 			target := int32(w.chainParams.CoinbaseMaturity)
 			if !confirmed(target, output.Height, syncBlock.Height) {
 				continue

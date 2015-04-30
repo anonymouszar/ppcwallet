@@ -242,10 +242,12 @@ func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval
 			}
 			if success {
 				log.Infof("Valid kernel hash found!")
-				log.Tracef("Eligible Tx: %v", eligible.Hash.String())
-				log.Tracef("Eligible Amount: %v", eligible.Amount)
-				log.Tracef("Eligible OP Hash: %v", eligible.OutPoint.Hash)
+				log.Tracef("Eligible Hash: %v", eligible.Hash.String())
+				log.Tracef("Eligible Time: %v", eligible.Received)
+				log.Tracef("Eligible Offset: %v", eligible.Offset)
 				log.Tracef("Eligible OP Idx: %v", eligible.OutPoint.Index)
+				log.Tracef("Eligible Amount: %v", eligible.Amount)
+				log.Tracef("Eligible Block StakeModifier: %v", block.KernelStakeModifier)
 				foundStake = eligible
 				csTxTime = nSearchTime - n
 				fKernelFound = true
@@ -577,7 +579,7 @@ func (w *Wallet) ppcFindEligibleOutputs(minconf int32, bs *waddrmgr.BlockStamp) 
 		if !confirmed(minconf, output.Height, bs.Height) {
 			continue
 		}
-		if output.FromCoinBase {
+		if output.FromCoinBase || output.FromCoinStake { // ppc:
 			target := int32(w.chainParams.CoinbaseMaturity)
 			if !confirmed(target, output.Height, bs.Height) {
 				continue
