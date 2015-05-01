@@ -31,7 +31,7 @@ import (
 
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/blockchain"
-	"github.com/ppcsuite/ppcd/btcjson"
+	"github.com/ppcsuite/ppcd/btcjson/v2/btcjson"
 	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"
@@ -1128,7 +1128,7 @@ func (s creditSlice) Swap(i, j int) {
 // contained within it will be considered.  If we know nothing about a
 // transaction an empty array will be returned.
 func (w *Wallet) ListUnspent(minconf, maxconf int32,
-	addresses map[string]bool) ([]*btcjson.ListUnspentResult, error) {
+	addresses map[string]struct{}) ([]*btcjson.ListUnspentResult, error) {
 
 	syncBlock := w.Manager.SyncedTo()
 
@@ -1139,6 +1139,11 @@ func (w *Wallet) ListUnspent(minconf, maxconf int32,
 		return nil, err
 	}
 	sort.Sort(sort.Reverse(creditSlice(unspent)))
+
+	defaultAccountName, err := w.Manager.AccountName(waddrmgr.DefaultAccountNum)
+	if err != nil {
+		return nil, err
+	}
 
 	results := make([]*btcjson.ListUnspentResult, 0, len(unspent))
 	for i := range unspent {
@@ -1170,7 +1175,7 @@ func (w *Wallet) ListUnspent(minconf, maxconf int32,
 		//
 		// This will be unnecessary once transactions and outputs are
 		// grouped under the associated account in the db.
-		acctName := waddrmgr.DefaultAccountName
+		acctName := defaultAccountName
 		_, addrs, _, err := txscript.ExtractPkScriptAddrs(
 			output.PkScript, w.chainParams)
 		if err != nil {
@@ -1197,7 +1202,7 @@ func (w *Wallet) ListUnspent(minconf, maxconf int32,
 		}
 	include:
 		result := &btcjson.ListUnspentResult{
-			TxId:          output.OutPoint.Hash.String(),
+			TxID:          output.OutPoint.Hash.String(),
 			Vout:          output.OutPoint.Index,
 			Account:       acctName,
 			ScriptPubKey:  hex.EncodeToString(output.PkScript),
