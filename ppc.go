@@ -5,24 +5,23 @@
 package main
 
 import (
-	"github.com/ppcsuite/ppcd/btcjson"
-	"github.com/ppcsuite/ppcd/btcjson/btcws"
+	"github.com/ppcsuite/ppcd/btcjson/v2/btcjson"
 	"github.com/ppcsuite/ppcwallet/chain"
 	"github.com/ppcsuite/ppcwallet/wallet"
 )
 
 // FindStake handles... TODO
-func FindStake(w *wallet.Wallet, chainSvr *chain.Client, icmd btcjson.Cmd) (interface{}, error) {
-	cmd := icmd.(*btcws.FindStakeCmd)
+func FindStake(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{}) (interface{}, error) {
+	cmd := icmd.(*btcjson.FindStakeCmd)
 
 	foundStakes, err := w.FindStake(cmd.MaxTime, cmd.Difficulty)
 	if err != nil {
 		return nil, err
 	}
 
-	stakesResult := []btcws.FindStakeResult{}
+	stakesResult := []btcjson.FindStakeResult{}
 	for _, foundStake := range foundStakes {
-		jsonResult := btcws.FindStakeResult{
+		jsonResult := btcjson.FindStakeResult{
 			Difficulty: foundStake.Difficulty,
 			Time:       foundStake.Time,
 		}

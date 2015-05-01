@@ -41,9 +41,8 @@ import (
 	"github.com/ppcsuite/btcrpcclient"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/btcec"
-	"github.com/ppcsuite/ppcd/btcjson"
-	"github.com/ppcsuite/ppcd/btcjson/btcws"
-	btcjson2 "github.com/ppcsuite/ppcd/btcjson/v2/btcjson"
+	"github.com/ppcsuite/ppcd/btcjson/v2/btcjson"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/chain"
@@ -1347,7 +1346,7 @@ var rpcHandlers = map[string]struct {
 	"renameaccount":           {handler: RenameAccount},
 	"walletislocked":          {handler: WalletIsLocked},
 
-	"findstake": FindStake, // ppc:
+	"findstake": {handler: FindStake}, // ppc:
 }
 
 // Unimplemented handles an unimplemented RPC request with the
@@ -1724,7 +1723,7 @@ func GetInfo(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{}) (interf
 	// TODO(davec): This should probably have a database version as opposed
 	// to using the manager version.
 	info.WalletVersion = int32(waddrmgr.LatestMgrVersion)
-	info.Balance = btcjson2.FloatAmount(bal.ToBTC())
+	info.Balance = btcjson.FloatAmount(bal.ToBTC())
 	info.PaytxFee = w.FeeIncrement.ToBTC()
 	// We don't set the following since they don't make much sense in the
 	// wallet architecture:
