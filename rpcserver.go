@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015 Conformal Systems LLC <info@conformal.com>
+ * Copyright (c) 2013-2015 The btcsuite developers
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -41,7 +41,7 @@ import (
 	"github.com/ppcsuite/btcrpcclient"
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/btcec"
-	"github.com/ppcsuite/ppcd/btcjson/v2/btcjson"
+	"github.com/ppcsuite/ppcd/btcjson"
 	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"

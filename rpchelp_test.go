@@ -1,4 +1,4 @@
-// Copyright (c) 2015 Conformal Systems LLC <info@conformal.com>
+// Copyright (c) 2015 The btcsuite developers
 //
 // Permission to use, copy, modify, and distribute this software for any
 // purpose with or without fee is hereby granted, provided that the above
@@ -18,7 +18,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ppcsuite/ppcd/btcjson/v2/btcjson"
+	"github.com/ppcsuite/ppcd/btcjson"
 	"github.com/ppcsuite/ppcwallet/internal/rpchelp"
 )
 

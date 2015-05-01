@@ -5,7 +5,7 @@
 package main
 
 import (
-	"github.com/ppcsuite/ppcd/btcjson/v2/btcjson"
+	"github.com/ppcsuite/ppcd/btcjson"
 	"github.com/ppcsuite/ppcwallet/chain"
 	"github.com/ppcsuite/ppcwallet/wallet"
 )
