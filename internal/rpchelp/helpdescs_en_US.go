@@ -91,6 +91,7 @@ var helpDescsEnUS = map[string]string{
 	"infowalletresult-unlocked_until":  "Unset",
 	"infowalletresult-keypoolsize":     "Unset",
 	"infowalletresult-keypoololdest":   "Unset",
+	"infowalletresult-moneysupply":     "<TODO>",
 
 	// GetNewAddressCmd help.
 	"getnewaddress--synopsis": "Generates and returns a new payment address.",
@@ -396,4 +397,12 @@ var helpDescsEnUS = map[string]string{
 	// WalletIsLockedCmd help.
 	"walletislocked--synopsis": "Returns whether or not the wallet is locked.",
 	"walletislocked--result0":  "Whether the wallet is locked",
+
+	// ppc: FindStakeCmd help.
+	"findstake--synopsis":        "<TODO>",
+	"findstake-verbose":          "<TODO>",
+	"findstake-difficulty":       "<TODO>",
+	"findstake-maxtime":          "<TODO>",
+	"findstakeresult-time":       "<TODO>",
+	"findstakeresult-difficulty": "<TODO>",
 }

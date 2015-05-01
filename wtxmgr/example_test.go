@@ -17,6 +17,7 @@ package wtxmgr_test
 import (
 	"fmt"
 
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/wtxmgr"
 )
@@ -33,14 +34,14 @@ var (
 
 func init() {
 	tx := spendOutput(&wire.ShaHash{}, 0, 10e8)
-	rec, err := wtxmgr.NewTxRecordFromMsgTx(tx, timeNow())
+	rec, err := wtxmgr.NewTxRecordFromMsgTx(tx) // ppc:
 	if err != nil {
 		panic(err)
 	}
 	exampleTxRecordA = rec
 
 	tx = spendOutput(&exampleTxRecordA.Hash, 0, 5e8, 5e8)
-	rec, err = wtxmgr.NewTxRecordFromMsgTx(tx, timeNow())
+	rec, err = wtxmgr.NewTxRecordFromMsgTx(tx) // ppc:
 	if err != nil {
 		panic(err)
 	}
@@ -62,17 +63,17 @@ func ExampleStore_Balance() {
 	// Prints balances for 0 block confirmations, 1 confirmation, and 6
 	// confirmations.
 	printBalances := func(syncHeight int32) {
-		zeroConfBal, err := s.Balance(0, syncHeight)
+		zeroConfBal, err := s.Balance(0, syncHeight, &chaincfg.MainNetParams)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		oneConfBal, err := s.Balance(1, syncHeight)
+		oneConfBal, err := s.Balance(1, syncHeight, &chaincfg.MainNetParams)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		sixConfBal, err := s.Balance(6, syncHeight)
+		sixConfBal, err := s.Balance(6, syncHeight, &chaincfg.MainNetParams)
 		if err != nil {
 			fmt.Println(err)
 			return
@@ -210,7 +211,7 @@ func Example_basicUsage() {
 	}
 
 	// Print the one confirmation balance.
-	bal, err := s.Balance(1, 100)
+	bal, err := s.Balance(1, 100, &chaincfg.MainNetParams)
 	if err != nil {
 		fmt.Println(err)
 		return

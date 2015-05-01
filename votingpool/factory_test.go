@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/btcutil/hdkeychain"
@@ -294,7 +293,7 @@ func TstCreateCreditsOnStore(t *testing.T, s *wtxmgr.Store, pkScript []byte,
 		Block: wtxmgr.Block{Height: TstInputsBlock},
 	}
 
-	rec, err := wtxmgr.NewTxRecordFromMsgTx(msgTx, time.Now())
+	rec, err := wtxmgr.NewTxRecordFromMsgTx(msgTx)
 	if err != nil {
 		t.Fatal(err)
 	}

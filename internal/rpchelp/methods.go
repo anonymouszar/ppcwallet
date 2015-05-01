@@ -16,7 +16,7 @@
 
 package rpchelp
 
-import "github.com/btcsuite/btcd/btcjson/v2/btcjson"
+import "github.com/ppcsuite/ppcd/btcjson/v2/btcjson"
 
 // Common return types.
 var (
@@ -78,6 +78,9 @@ var Methods = []struct {
 	{"listalltransactions", returnsLTRArray},
 	{"renameaccount", nil},
 	{"walletislocked", returnsBool},
+
+	// ppc:
+	{"findstake", []interface{}{(*btcjson.FindStakeResult)(nil)}},
 }
 
 var HelpDescs = []struct {

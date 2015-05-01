@@ -24,7 +24,7 @@ import (
 	"time"
 
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/ppcd/blockchain"
+	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/walletdb"
 	_ "github.com/ppcsuite/ppcwallet/walletdb/bdb"
@@ -147,7 +147,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "txout insert",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstRecvSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstRecvSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -171,7 +171,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "insert duplicate unconfirmed",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstRecvSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstRecvSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -195,7 +195,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "confirmed txout insert",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstRecvSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstRecvSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -217,7 +217,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "insert duplicate confirmed",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstRecvSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstRecvSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -254,7 +254,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "insert confirmed double spend",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstDoubleSpendSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstDoubleSpendSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -276,7 +276,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "insert unconfirmed debit",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstSpendingSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstSpendingSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -293,7 +293,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "insert unconfirmed debit again",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstDoubleSpendSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstDoubleSpendSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -310,7 +310,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "insert change (index 0)",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstSpendingSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstSpendingSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -334,7 +334,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "insert output back to this own wallet (index 1)",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstSpendingSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstSpendingSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -358,7 +358,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "confirm signed tx",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstSpendingSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstSpendingSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -423,7 +423,7 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 		{
 			name: "insert original recv txout",
 			f: func(s *Store) (*Store, error) {
-				rec, err := NewTxRecord(TstRecvSerializedTx, time.Now())
+				rec, err := NewTxRecord(TstRecvSerializedTx) // ppc:
 				if err != nil {
 					return nil, err
 				}
@@ -455,14 +455,14 @@ func TestInsertsCreditsDebitsRollbacks(t *testing.T) {
 			t.Fatalf("%s: got error: %v", test.name, err)
 		}
 		s = tmpStore
-		bal, err := s.Balance(1, TstRecvCurrentHeight)
+		bal, err := s.Balance(1, TstRecvCurrentHeight, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("%s: Confirmed Balance failed: %v", test.name, err)
 		}
 		if bal != test.bal {
 			t.Fatalf("%s: balance mismatch: expected: %d, got: %d", test.name, test.bal, bal)
 		}
-		unc, err := s.Balance(0, TstRecvCurrentHeight)
+		unc, err := s.Balance(0, TstRecvCurrentHeight, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("%s: Unconfirmed Balance failed: %v", test.name, err)
 		}
@@ -515,7 +515,7 @@ func TestFindingSpentCredits(t *testing.T) {
 	}
 
 	// Insert transaction and credit which will be spent.
-	recvRec, err := NewTxRecord(TstRecvSerializedTx, time.Now())
+	recvRec, err := NewTxRecord(TstRecvSerializedTx) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -530,7 +530,7 @@ func TestFindingSpentCredits(t *testing.T) {
 	}
 
 	// Insert confirmed transaction which spends the above credit.
-	spendingRec, err := NewTxRecord(TstSpendingSerializedTx, time.Now())
+	spendingRec, err := NewTxRecord(TstSpendingSerializedTx) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -544,7 +544,7 @@ func TestFindingSpentCredits(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	bal, err := s.Balance(1, TstSignedTxBlockDetails.Height)
+	bal, err := s.Balance(1, TstSignedTxBlockDetails.Height, &chaincfg.MainNetParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -609,7 +609,8 @@ func TestCoinbases(t *testing.T) {
 	}
 
 	cb := newCoinBase(20e8, 10e8, 30e8)
-	cbRec, err := NewTxRecordFromMsgTx(cb, b100.Time)
+	cb.Time = b100.Time                    // ppc:
+	cbRec, err := NewTxRecordFromMsgTx(cb) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -639,75 +640,76 @@ func TestCoinbases(t *testing.T) {
 		minConf int32
 		bal     btcutil.Amount
 	}
+	CoinbaseMaturity := int32(chaincfg.MainNetParams.CoinbaseMaturity)
 	balTests := []balTest{
 		// Next block it is still immature
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 2,
+			height:  b100.Height + CoinbaseMaturity - 2,
 			minConf: 0,
 			bal:     0,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 2,
-			minConf: blockchain.CoinbaseMaturity,
+			height:  b100.Height + CoinbaseMaturity - 2,
+			minConf: CoinbaseMaturity,
 			bal:     0,
 		},
 
 		// Next block it matures
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 1,
+			height:  b100.Height + CoinbaseMaturity - 1,
 			minConf: 0,
 			bal:     50e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 1,
+			height:  b100.Height + CoinbaseMaturity - 1,
 			minConf: 1,
 			bal:     50e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 1,
-			minConf: blockchain.CoinbaseMaturity - 1,
+			height:  b100.Height + CoinbaseMaturity - 1,
+			minConf: CoinbaseMaturity - 1,
 			bal:     50e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 1,
-			minConf: blockchain.CoinbaseMaturity,
+			height:  b100.Height + CoinbaseMaturity - 1,
+			minConf: CoinbaseMaturity,
 			bal:     50e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 1,
-			minConf: blockchain.CoinbaseMaturity + 1,
+			height:  b100.Height + CoinbaseMaturity - 1,
+			minConf: CoinbaseMaturity + 1,
 			bal:     0,
 		},
 
 		// Matures at this block
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
+			height:  b100.Height + CoinbaseMaturity,
 			minConf: 0,
 			bal:     50e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
+			height:  b100.Height + CoinbaseMaturity,
 			minConf: 1,
 			bal:     50e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
-			minConf: blockchain.CoinbaseMaturity,
+			height:  b100.Height + CoinbaseMaturity,
+			minConf: CoinbaseMaturity,
 			bal:     50e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
-			minConf: blockchain.CoinbaseMaturity + 1,
+			height:  b100.Height + CoinbaseMaturity,
+			minConf: CoinbaseMaturity + 1,
 			bal:     50e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
-			minConf: blockchain.CoinbaseMaturity + 2,
+			height:  b100.Height + CoinbaseMaturity,
+			minConf: CoinbaseMaturity + 2,
 			bal:     0,
 		},
 	}
 	for i, tst := range balTests {
-		bal, err := s.Balance(tst.minConf, tst.height)
+		bal, err := s.Balance(tst.minConf, tst.height, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("Balance test %d: Store.Balance failed: %v", i, err)
 		}
@@ -723,7 +725,8 @@ func TestCoinbases(t *testing.T) {
 	// the next block will mature the coinbase.
 	spenderATime := time.Now()
 	spenderA := spendOutput(&cbRec.Hash, 0, 5e8, 15e8)
-	spenderARec, err := NewTxRecordFromMsgTx(spenderA, spenderATime)
+	spenderA.Time = spenderATime
+	spenderARec, err := NewTxRecordFromMsgTx(spenderA) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -739,56 +742,56 @@ func TestCoinbases(t *testing.T) {
 	balTests = []balTest{
 		// Next block it matures
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 1,
+			height:  b100.Height + CoinbaseMaturity - 1,
 			minConf: 0,
 			bal:     35e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 1,
+			height:  b100.Height + CoinbaseMaturity - 1,
 			minConf: 1,
 			bal:     30e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 1,
-			minConf: blockchain.CoinbaseMaturity,
+			height:  b100.Height + CoinbaseMaturity - 1,
+			minConf: CoinbaseMaturity,
 			bal:     30e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity - 1,
-			minConf: blockchain.CoinbaseMaturity + 1,
+			height:  b100.Height + CoinbaseMaturity - 1,
+			minConf: CoinbaseMaturity + 1,
 			bal:     0,
 		},
 
 		// Matures at this block
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
+			height:  b100.Height + CoinbaseMaturity,
 			minConf: 0,
 			bal:     35e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
+			height:  b100.Height + CoinbaseMaturity,
 			minConf: 1,
 			bal:     30e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
-			minConf: blockchain.CoinbaseMaturity,
+			height:  b100.Height + CoinbaseMaturity,
+			minConf: CoinbaseMaturity,
 			bal:     30e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
-			minConf: blockchain.CoinbaseMaturity + 1,
+			height:  b100.Height + CoinbaseMaturity,
+			minConf: CoinbaseMaturity + 1,
 			bal:     30e8,
 		},
 		{
-			height:  b100.Height + blockchain.CoinbaseMaturity,
-			minConf: blockchain.CoinbaseMaturity + 2,
+			height:  b100.Height + CoinbaseMaturity,
+			minConf: CoinbaseMaturity + 2,
 			bal:     0,
 		},
 	}
 	balTestsBeforeMaturity := balTests
 	for i, tst := range balTests {
-		bal, err := s.Balance(tst.minConf, tst.height)
+		bal, err := s.Balance(tst.minConf, tst.height, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("Balance test %d: Store.Balance failed: %v", i, err)
 		}
@@ -802,7 +805,7 @@ func TestCoinbases(t *testing.T) {
 
 	// Mine the spending transaction in the block the coinbase matures.
 	bMaturity := BlockMeta{
-		Block: Block{Height: b100.Height + blockchain.CoinbaseMaturity},
+		Block: Block{Height: b100.Height + CoinbaseMaturity},
 		Time:  time.Now(),
 	}
 	err = s.InsertTx(spenderARec, &bMaturity)
@@ -829,17 +832,17 @@ func TestCoinbases(t *testing.T) {
 		},
 		{
 			height:  bMaturity.Height,
-			minConf: blockchain.CoinbaseMaturity,
+			minConf: CoinbaseMaturity,
 			bal:     30e8,
 		},
 		{
 			height:  bMaturity.Height,
-			minConf: blockchain.CoinbaseMaturity + 1,
+			minConf: CoinbaseMaturity + 1,
 			bal:     30e8,
 		},
 		{
 			height:  bMaturity.Height,
-			minConf: blockchain.CoinbaseMaturity + 2,
+			minConf: CoinbaseMaturity + 2,
 			bal:     0,
 		},
 
@@ -861,17 +864,17 @@ func TestCoinbases(t *testing.T) {
 		},
 		{
 			height:  bMaturity.Height + 1,
-			minConf: blockchain.CoinbaseMaturity + 2,
+			minConf: CoinbaseMaturity + 2,
 			bal:     30e8,
 		},
 		{
 			height:  bMaturity.Height + 1,
-			minConf: blockchain.CoinbaseMaturity + 3,
+			minConf: CoinbaseMaturity + 3,
 			bal:     0,
 		},
 	}
 	for i, tst := range balTests {
-		bal, err := s.Balance(tst.minConf, tst.height)
+		bal, err := s.Balance(tst.minConf, tst.height, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("Balance test %d: Store.Balance failed: %v", i, err)
 		}
@@ -891,7 +894,8 @@ func TestCoinbases(t *testing.T) {
 	// This will mean the balance tests should report identical results.
 	spenderBTime := time.Now()
 	spenderB := spendOutput(&spenderARec.Hash, 0, 5e8)
-	spenderBRec, err := NewTxRecordFromMsgTx(spenderB, spenderBTime)
+	spenderB.Time = spenderBTime
+	spenderBRec, err := NewTxRecordFromMsgTx(spenderB) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -904,7 +908,7 @@ func TestCoinbases(t *testing.T) {
 		t.Fatal(err)
 	}
 	for i, tst := range balTests {
-		bal, err := s.Balance(tst.minConf, tst.height)
+		bal, err := s.Balance(tst.minConf, tst.height, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("Balance test %d: Store.Balance failed: %v", i, err)
 		}
@@ -924,7 +928,7 @@ func TestCoinbases(t *testing.T) {
 	}
 	balTests = balTestsBeforeMaturity
 	for i, tst := range balTests {
-		bal, err := s.Balance(tst.minConf, tst.height)
+		bal, err := s.Balance(tst.minConf, tst.height, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("Balance test %d: Store.Balance failed: %v", i, err)
 		}
@@ -970,7 +974,7 @@ func TestCoinbases(t *testing.T) {
 		},
 	}
 	for i, tst := range balTests {
-		bal, err := s.Balance(tst.minConf, tst.height)
+		bal, err := s.Balance(tst.minConf, tst.height, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("Balance test %d: Store.Balance failed: %v", i, err)
 		}
@@ -1006,7 +1010,8 @@ func TestMoveMultipleToSameBlock(t *testing.T) {
 	}
 
 	cb := newCoinBase(20e8, 30e8)
-	cbRec, err := NewTxRecordFromMsgTx(cb, b100.Time)
+	cb.Time = b100.Time
+	cbRec, err := NewTxRecordFromMsgTx(cb) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1029,7 +1034,8 @@ func TestMoveMultipleToSameBlock(t *testing.T) {
 	// outputs.
 	spenderATime := time.Now()
 	spenderA := spendOutput(&cbRec.Hash, 0, 1e8, 2e8, 18e8)
-	spenderARec, err := NewTxRecordFromMsgTx(spenderA, spenderATime)
+	spenderA.Time = spenderATime
+	spenderARec, err := NewTxRecordFromMsgTx(spenderA) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1047,7 +1053,8 @@ func TestMoveMultipleToSameBlock(t *testing.T) {
 	}
 	spenderBTime := time.Now()
 	spenderB := spendOutput(&cbRec.Hash, 1, 4e8, 8e8, 18e8)
-	spenderBRec, err := NewTxRecordFromMsgTx(spenderB, spenderBTime)
+	spenderB.Time = spenderBTime
+	spenderBRec, err := NewTxRecordFromMsgTx(spenderB) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1065,8 +1072,9 @@ func TestMoveMultipleToSameBlock(t *testing.T) {
 	}
 
 	// Mine both transactions in the block that matures the coinbase.
+	CoinbaseMaturity := int32(chaincfg.MainNetParams.CoinbaseMaturity)
 	bMaturity := BlockMeta{
-		Block: Block{Height: b100.Height + blockchain.CoinbaseMaturity},
+		Block: Block{Height: b100.Height + CoinbaseMaturity},
 		Time:  time.Now(),
 	}
 	err = s.InsertTx(spenderARec, &bMaturity)
@@ -1136,7 +1144,7 @@ func TestMoveMultipleToSameBlock(t *testing.T) {
 		},
 	}
 	for i, tst := range balTests {
-		bal, err := s.Balance(tst.minConf, tst.height)
+		bal, err := s.Balance(tst.minConf, tst.height, &chaincfg.MainNetParams)
 		if err != nil {
 			t.Fatalf("Balance test %d: Store.Balance failed: %v", i, err)
 		}
@@ -1169,7 +1177,7 @@ func TestInsertUnserializedTx(t *testing.T) {
 	}
 
 	tx := newCoinBase(50e8)
-	rec, err := NewTxRecordFromMsgTx(tx, timeNow())
+	rec, err := NewTxRecordFromMsgTx(tx) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1184,7 +1192,7 @@ func TestInsertUnserializedTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec2, err := NewTxRecordFromMsgTx(&details.MsgTx, rec.Received)
+	rec2, err := NewTxRecordFromMsgTx(&details.MsgTx) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1194,7 +1202,7 @@ func TestInsertUnserializedTx(t *testing.T) {
 
 	// Now test that path with an unmined transaction.
 	tx = spendOutput(&rec.Hash, 0, 50e8)
-	rec, err = NewTxRecordFromMsgTx(tx, timeNow())
+	rec, err = NewTxRecordFromMsgTx(tx) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1206,7 +1214,7 @@ func TestInsertUnserializedTx(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rec2, err = NewTxRecordFromMsgTx(&details.MsgTx, rec.Received)
+	rec2, err = NewTxRecordFromMsgTx(&details.MsgTx) // ppc:
 	if err != nil {
 		t.Fatal(err)
 	}

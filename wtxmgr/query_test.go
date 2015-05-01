@@ -158,11 +158,11 @@ func equalTxDetails(t *testing.T, got, exp *TxDetails) {
 		t.Errorf("Got: %v", got.Hash)
 		t.Errorf("Expected: %v", exp.Hash)
 	}
-	if got.Received != exp.Received {
+	/* ppc: if got.Received != exp.Received {
 		t.Errorf("Found mismatched receive time")
 		t.Errorf("Got: %v", got.Received)
 		t.Errorf("Expected: %v", exp.Received)
-	}
+	}*/
 	if !bytes.Equal(got.SerializedTx, exp.SerializedTx) {
 		t.Errorf("Found mismatched serialized txs")
 		t.Errorf("Got: %x", got.SerializedTx)
@@ -279,7 +279,7 @@ func TestStoreQueries(t *testing.T) {
 		}
 	}
 	newTxRecordFromMsgTx := func(tx *wire.MsgTx, received time.Time) *TxRecord {
-		rec, err := NewTxRecordFromMsgTx(tx, received)
+		rec, err := NewTxRecordFromMsgTx(tx) // ppc:
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -579,7 +579,7 @@ func TestPreviousPkScripts(t *testing.T) {
 	}
 
 	newTxRecordFromMsgTx := func(tx *wire.MsgTx) *TxRecord {
-		rec, err := NewTxRecordFromMsgTx(tx, timeNow())
+		rec, err := NewTxRecordFromMsgTx(tx) // ppc:
 		if err != nil {
 			t.Fatal(err)
 		}
