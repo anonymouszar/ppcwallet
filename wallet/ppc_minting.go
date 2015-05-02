@@ -96,6 +96,7 @@ func (m *Minter) mintBlocks() {
 
 	log.Tracef("Starting minting blocks worker")
 
+	var coinStakeTx *wire.MsgTx
 	//TODO(mably) static int64 nLastCoinStakeSearchTime = GetAdjustedTime();  // only initialized at startup
 	var nLastCoinStakeSearchTime int64 = time.Now().Unix()
 	var nLastCoinStakeSearchInterval int64 = 0
@@ -130,12 +131,16 @@ out:
 		}
 
 		nSearchTime := time.Now().Unix()
-		_, err = m.wallet.CreateCoinStake(bits,
+
+		coinStakeTx, err = m.wallet.CreateCoinStake(bits,
 			nSearchTime, nSearchTime-nLastCoinStakeSearchTime)
 		if err != nil {
 			log.Warnf("CoinStake error:\n %v", err)
 			time.Sleep(time.Millisecond * 500)
 			continue
+		}
+		if coinStakeTx != nil {
+			m.wallet.chainSvr.SendCoinStakeTransaction(coinStakeTx)
 		}
 
 		nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime
@@ -158,7 +163,7 @@ func newMinter(w *Wallet) *Minter {
 	}
 }
 
-func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval int64) (coinStakeTx *btcutil.Tx, err error) {
+func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval int64) (coinStakeTx *wire.MsgTx, err error) {
 
 	// Get current block's height and hash.
 	bs, err := w.chainSvr.BlockStamp()
@@ -260,21 +265,21 @@ func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval
 	}
 
 	if fKernelFound {
-		coinStakeTx, err = w.createCoinstakeTx(
-			foundStake, csTxTime, eligibles)
-		if err != nil {
-			return
+		if w.Manager.IsLocked() {
+			err = errors.New(
+				"Valid kernel hash was found but manager is locked!")
+		} else {
+			coinStakeTx, err = w.createCoinstakeTx(
+				foundStake, csTxTime, eligibles)
 		}
 	}
-
-	// TODO to be continued...
 
 	return
 }
 
 // createCoinstakeTx returns a coinstake transaction paying an appropriate subsidy
 // based on the passed block height to the provided address.
-func (w *Wallet) createCoinstakeTx(stake wtxmgr.Credit, txTime int64, eligibles []wtxmgr.Credit) (*btcutil.Tx, error) {
+func (w *Wallet) createCoinstakeTx(stake wtxmgr.Credit, txTime int64, eligibles []wtxmgr.Credit) (*wire.MsgTx, error) {
 
 	var err error
 
@@ -446,7 +451,7 @@ out:
 		}
 	}
 
-	return btcutil.NewTx(coinStakeTx), nil
+	return coinStakeTx, nil
 }
 
 func (w *Wallet) signSelectedCredits(msgTx *wire.MsgTx, eligibles []wtxmgr.Credit) error {
@@ -507,7 +512,7 @@ func (w *Wallet) signSelectedCredits(msgTx *wire.MsgTx, eligibles []wtxmgr.Credi
 			complete = false
 			continue
 		}
-		txIn.SignatureScript = script
+		msgTx.TxIn[i].SignatureScript = script
 
 		// Either it was already signed or we just signed it.
 		// Find out if it is completely satisfied or still needs more.
