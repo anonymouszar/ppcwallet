@@ -140,7 +140,21 @@ out:
 			continue
 		}
 		if coinStakeTx != nil {
-			m.wallet.chainSvr.SendCoinStakeTransaction(coinStakeTx)
+			r, err := m.wallet.chainSvr.SendCoinStakeTransaction(coinStakeTx)
+			if err != nil {
+				log.Warnf("Send CoinStakeTx error:\n %v", err)
+				time.Sleep(time.Millisecond * 500)
+				continue
+			}
+			txSha := coinStakeTx.TxSha()
+			blockSha, _ := wire.NewShaHashFromStr(r.HexBlockSha)
+			signature, err := m.wallet.signBlockSha(coinStakeTx, blockSha)
+			if err != nil {
+				log.Warnf("BlockHeader signature error:\n %v", err)
+				time.Sleep(time.Millisecond * 500)
+				continue
+			}
+			m.wallet.chainSvr.SendMintBlockSignature(&txSha, &signature)
 		}
 
 		nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime
@@ -152,6 +166,45 @@ out:
 	}
 
 	log.Tracef("Minting blocks worker done")
+}
+
+// mintBlocks is a worker that is controlled by the miningWorkerController.
+func (w *Wallet) signBlockSha(coinStakeTx *wire.MsgTx, blockSha *wire.ShaHash) ([]byte, error) {
+
+	txOut := coinStakeTx.TxOut[1]
+	scriptClass, addresses, _, err := txscript.ExtractPkScriptAddrs(txOut.PkScript, w.chainParams)
+	if err != nil {
+		return nil, err
+	}
+	if scriptClass != txscript.PubKeyTy {
+		return nil, errors.New("address is not a pubkey address")
+	}
+	addr, ok := addresses[0].(*btcutil.AddressPubKey)
+	if !ok {
+		return nil, nil
+	}
+	address, err := w.Manager.Address(addr)
+	if err != nil {
+		address, err = w.Manager.Address(addr.AddressPubKeyHash()) // TODO
+		if err != nil {
+			return nil, err
+		}
+	}
+	pka, ok := address.(waddrmgr.ManagedPubKeyAddress)
+	if !ok {
+		return nil, errors.New("address is not a pubkey address")
+	}
+	key, err := pka.PrivKey()
+	if err != nil {
+		return nil, err
+	}
+
+	signature, err := key.Sign(blockSha.Bytes())
+	if err != nil {
+		return nil, err
+	}
+
+	return signature.Serialize(), nil
 }
 
 // newMinter returns a new instance of a PPC minter for the provided wallet.
@@ -310,7 +363,7 @@ func (w *Wallet) createCoinstakeTx(stake wtxmgr.Credit, txTime int64, eligibles 
 			return nil, errors.New("address is not a pubkey address")
 		}
 		pkAddr, err := btcutil.NewAddressPubKey(
-			pka.PubKey().SerializeUncompressed(), w.chainParams)
+			pka.PubKey().SerializeCompressed(), w.chainParams)
 		if err != nil {
 			return nil, err
 		}
