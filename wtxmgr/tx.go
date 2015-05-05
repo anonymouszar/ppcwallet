@@ -522,13 +522,15 @@ func (s *Store) rollback(ns walletdb.Bucket, height int32) error {
 				return err
 			}
 
+			op := wire.OutPoint{Hash: rec.Hash} // ppc:
+			isCoinStake := blockchain.IsCoinStakeTx(&rec.MsgTx) // ppc:
+
 			// Handle coinbase transactions specially since they are
 			// not moved to the unconfirmed store.  A coinbase cannot
 			// contain any debits, but all credits should be removed
 			// and the mined balance decremented.
 			// TODO(mably) ppc: same for coinstake?
 			if blockchain.IsCoinBaseTx(&rec.MsgTx) {
-				op := wire.OutPoint{Hash: rec.Hash}
 				for i, output := range rec.MsgTx.TxOut {
 					k, v := existsCredit(ns, &rec.Hash,
 						uint32(i), &b.Block)
@@ -556,9 +558,12 @@ func (s *Store) rollback(ns walletdb.Bucket, height int32) error {
 				continue
 			}
 
-			err = putRawUnmined(ns, txHash[:], recVal)
-			if err != nil {
-				return err
+			// ppc: TODO(mably)
+			if !isCoinStake {
+				err = putRawUnmined(ns, txHash[:], recVal)
+				if err != nil {
+					return err
+				}
 			}
 
 			// For each debit recorded for this transaction, mark
@@ -568,11 +573,13 @@ func (s *Store) rollback(ns walletdb.Bucket, height int32) error {
 			// output, not just debits.
 			for i, input := range rec.MsgTx.TxIn {
 				prevOut := &input.PreviousOutPoint
-				prevOutKey := canonicalOutPoint(&prevOut.Hash,
-					prevOut.Index)
-				err = putRawUnminedInput(ns, prevOutKey, rec.Hash[:])
-				if err != nil {
-					return err
+				prevOutKey := canonicalOutPoint(&prevOut.Hash, prevOut.Index)
+
+				if !isCoinStake { // ppc:
+					err = putRawUnminedInput(ns, prevOutKey, rec.Hash[:])
+					if err != nil {
+						return err
+					}
 				}
 
 				// If this input is a debit, remove the debit
@@ -635,15 +642,23 @@ func (s *Store) rollback(ns walletdb.Bucket, height int32) error {
 					continue
 				}
 
-				amt, change, err := fetchRawCreditAmountChange(v)
-				if err != nil {
-					return err
+				if isCoinStake { // ppc:
+					op.Index = uint32(i)
+					coinBaseCredits = append(coinBaseCredits, op)
 				}
+
 				outPointKey := canonicalOutPoint(&rec.Hash, uint32(i))
-				unminedCredVal := valueUnminedCredit(amt, change)
-				err = putRawUnminedCredit(ns, outPointKey, unminedCredVal)
-				if err != nil {
-					return err
+
+				if !isCoinStake { // ppc:
+					amt, change, err := fetchRawCreditAmountChange(v)
+					if err != nil {
+						return err
+					}
+					unminedCredVal := valueUnminedCredit(amt, change)
+					err = putRawUnminedCredit(ns, outPointKey, unminedCredVal)
+					if err != nil {
+						return err
+					}
 				}
 
 				err = deleteRawCredit(ns, k)
