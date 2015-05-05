@@ -5,6 +5,7 @@
 package wallet
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -350,6 +351,10 @@ func (w *Wallet) createCoinstakeTx(stake wtxmgr.Credit, txTime int64, eligibles 
 		return nil, errors.New("failed to find a valid address")
 	}
 
+	log.Tracef("createCoinStake stakeAmount = %v", stake.Amount)
+	log.Tracef("createCoinStake scriptClass = %v", scriptClass)
+	log.Tracef("createCoinStake addrs[0] = %v", addrs[0])
+
 	switch scriptClass {
 	case txscript.PubKeyTy:
 	case txscript.PubKeyHashTy:
@@ -374,6 +379,8 @@ func (w *Wallet) createCoinstakeTx(stake wtxmgr.Credit, txTime int64, eligibles 
 	default:
 		return nil, fmt.Errorf("no support for kernel type=%v", scriptClass)
 	}
+
+	log.Tracef("createCoinStake pkScript = %v", hex.EncodeToString(pkScript))
 
 	lastPOWReward, err := w.chainSvr.Client.GetLastProofOfWorkReward()
 	if err != nil {
@@ -450,6 +457,8 @@ func (w *Wallet) createCoinstakeTx(stake wtxmgr.Credit, txTime int64, eligibles 
 			if eligible.Received.Add(time.Second * time.Duration(blockchain.StakeMaxAge)).After(coinStakeTx.Time) { //(pcoin.first->nTime + STAKE_MAX_AGE > coinStakeTx.nTime)
 				continue
 			}
+
+			log.Tracef("createCoinStake added eligible = %v, %v, %v", eligible.OutPoint.Hash, eligible.OutPoint.Index, eligible.Amount)
 
 			coinStakeTx.AddTxIn(&wire.TxIn{
 				PreviousOutPoint: eligible.OutPoint,
@@ -553,25 +562,28 @@ func (w *Wallet) signSelectedCredits(msgTx *wire.MsgTx, eligibles []wtxmgr.Credi
 	// reply.
 	complete := true
 	for i, eligible := range eligibles {
-		txIn := msgTx.TxIn[i]
-		input := eligible.PkScript
+		pkScript := eligible.PkScript
 
 		script, err := txscript.SignTxOutput(w.chainParams,
-			msgTx, i, input, txscript.SigHashAll, getKey,
-			getScript, txIn.SignatureScript)
+			msgTx, i, pkScript, txscript.SigHashAll, getKey,
+			getScript, nil)
 		// Failure to sign isn't an error, it just means that
 		// the tx isn't complete.
 		if err != nil {
+			log.Tracef("signSelectedCredits Error %v", err)
 			complete = false
 			continue
 		}
 		msgTx.TxIn[i].SignatureScript = script
 
+		log.Tracef("signSelectedCredits txIn[%v] = %v, %v, %v", i, msgTx.TxIn[i].PreviousOutPoint.Hash, msgTx.TxIn[i].PreviousOutPoint.Index, hex.EncodeToString(msgTx.TxIn[i].SignatureScript))
+
 		// Either it was already signed or we just signed it.
 		// Find out if it is completely satisfied or still needs more.
 		engine, err := txscript.NewEngine(
-			input, msgTx, i, txscript.StandardVerifyFlags)
+			pkScript, msgTx, i, txscript.StandardVerifyFlags)
 		if err != nil || engine.Execute() != nil {
+			log.Tracef("signSelectedCredits Error = %v", err)
 			complete = false
 		}
 	}
@@ -704,7 +716,7 @@ func (w *Wallet) FindStake(maxTime int64, diff float64) (foundStakes []FoundStak
 
 	fromTime := time.Now().Unix()
 	if maxTime == 0 {
-		maxTime = fromTime + 30*24*60*60 // 30 days
+		maxTime = fromTime + 21*24*60*60 // 21 days
 	}
 
 	foundStakes = make([]FoundStake, 0)
