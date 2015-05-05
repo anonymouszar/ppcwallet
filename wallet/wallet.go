@@ -844,6 +844,11 @@ func RecvCategory(details *wtxmgr.TxDetails, syncHeight int32, net *chaincfg.Par
 		}
 		return CreditImmature
 	}
+	if blockchain.IsCoinStakeTx(&details.MsgTx) { // ppc:
+		if !confirmed(int32(net.CoinbaseMaturity), details.Block.Height, syncHeight) {
+			return CreditImmature
+		}
+	}
 	return CreditReceive
 }
 
