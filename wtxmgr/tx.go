@@ -522,7 +522,7 @@ func (s *Store) rollback(ns walletdb.Bucket, height int32) error {
 				return err
 			}
 
-			op := wire.OutPoint{Hash: rec.Hash} // ppc:
+			op := wire.OutPoint{Hash: rec.Hash}                 // ppc:
 			isCoinStake := blockchain.IsCoinStakeTx(&rec.MsgTx) // ppc:
 
 			// Handle coinbase transactions specially since they are

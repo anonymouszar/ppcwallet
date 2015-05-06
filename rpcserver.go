@@ -2091,9 +2091,20 @@ func GetTransaction(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{}) 
 		ret.Details = make([]btcjson.GetTransactionDetailsResult, 1, len(details.Credits)+1)
 
 		ret.Details[0] = btcjson.GetTransactionDetailsResult{
+			// Fields left zeroed:
+			//   InvolvesWatchOnly
+			//   Account
+			//   Address
+			//   Vout
+			//
+			// TODO(jrick): Address and Vout should always be set,
+			// but we're doing the wrong thing here by not matching
+			// core.  Instead, gettransaction should only be adding
+			// details for transaction outputs, just like
+			// listtransactions (but using the short result format).
 			Category: "send",
 			Amount:   (-debitTotal).ToBTC(), // negative since it is a send
-			Fee:      feeF64,
+			Fee:      &feeF64,
 		}
 		ret.Fee = feeF64
 	}
@@ -2113,9 +2124,14 @@ func GetTransaction(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{}) 
 		}
 
 		ret.Details = append(ret.Details, btcjson.GetTransactionDetailsResult{
+			// Fields left zeroed:
+			//   InvolvesWatchOnly
+			//   Account
+			//   Fee
+			Address:  addr,
 			Category: credCat,
 			Amount:   cred.Amount.ToBTC(),
-			Address:  addr,
+			Vout:     cred.Index,
 		})
 	}
 
