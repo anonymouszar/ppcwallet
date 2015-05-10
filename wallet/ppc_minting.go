@@ -186,7 +186,7 @@ func (w *Wallet) signBlockSha(coinStakeTx *wire.MsgTx, blockSha *wire.ShaHash) (
 	}
 	address, err := w.Manager.Address(addr)
 	if err != nil {
-		address, err = w.Manager.Address(addr.AddressPubKeyHash()) // TODO
+		address, err = w.Manager.Address(addr.AddressPubKeyHash()) // ppc: TODO why needed?
 		if err != nil {
 			return nil, err
 		}
