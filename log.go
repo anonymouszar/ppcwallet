@@ -52,7 +52,7 @@ var (
 var subsystemLoggers = map[string]btclog.Logger{
 	"BTCW": log,
 	"WLLT": walletLog,
-	"TMGR": txmgrLog,
+	"TXST": txmgrLog,
 	"CHNS": chainLog,
 }
 
