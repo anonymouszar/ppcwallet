@@ -169,7 +169,7 @@ out:
 	log.Tracef("Minting blocks worker done")
 }
 
-// mintBlocks is a worker that is controlled by the miningWorkerController.
+// signBlockSha TODO.
 func (w *Wallet) signBlockSha(coinStakeTx *wire.MsgTx, blockSha *wire.ShaHash) ([]byte, error) {
 
 	txOut := coinStakeTx.TxOut[1]
@@ -186,10 +186,7 @@ func (w *Wallet) signBlockSha(coinStakeTx *wire.MsgTx, blockSha *wire.ShaHash) (
 	}
 	address, err := w.Manager.Address(addr)
 	if err != nil {
-		address, err = w.Manager.Address(addr.AddressPubKeyHash()) // ppc: TODO why needed?
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 	pka, ok := address.(waddrmgr.ManagedPubKeyAddress)
 	if !ok {

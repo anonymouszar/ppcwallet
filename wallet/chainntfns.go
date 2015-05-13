@@ -17,7 +17,6 @@
 package wallet
 
 import (
-	"github.com/ppcsuite/btcutil"
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcwallet/chain"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
@@ -168,13 +167,6 @@ func (w *Wallet) addRelevantTx(rec *wtxmgr.TxRecord, block *wtxmgr.BlockMeta) er
 		}
 		for _, addr := range addrs {
 			ma, err := w.Manager.Address(addr)
-			// ppc: TODO why needed?
-			if err != nil {
-				switch addr := addr.(type) {
-				case *btcutil.AddressPubKey:
-					ma, err = w.Manager.Address(addr.AddressPubKeyHash())
-				}
-			}
 			if err == nil {
 				// TODO: Credits should be added with the
 				// account they belong to, so wtxmgr is able to

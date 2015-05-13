@@ -680,6 +680,11 @@ func (m *Manager) Address(address btcutil.Address) (ManagedAddress, error) {
 	// NOTE: Not using a defer on the lock here since a write lock is
 	// needed if the lookup fails.
 	m.mtx.RLock()
+	// ppc: btcwallet doesn't handle pubkey addresses as needed by ppc
+	switch addr := address.(type) {
+	case *btcutil.AddressPubKey:
+		address = addr.AddressPubKeyHash()
+	}
 	if ma, ok := m.addrs[addrKey(address.ScriptAddress())]; ok {
 		m.mtx.RUnlock()
 		return ma, nil
