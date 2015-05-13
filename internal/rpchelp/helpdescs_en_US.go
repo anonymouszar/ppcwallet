@@ -201,10 +201,14 @@ var helpDescsEnUS = map[string]string{
 	"listreceivedbyaddressresult-involvesWatchonly": "Unset",
 
 	// ListSinceBlockCmd help.
-	"listsinceblock--synopsis":           "Returns a JSON array of objects listing details of wallet transactions after some block.",
-	"listsinceblock-blockhash":           "Hash of the parent block of the first block to consider transactions from",
-	"listsinceblock-targetconfirmations": "Minimum number of block confirmations required before a transaction is considered",
+	"listsinceblock--synopsis":           "Returns a JSON array of objects listing details of all wallet transactions after some block.",
+	"listsinceblock-blockhash":           "Hash of the parent block of the first block to consider transactions from, or unset to list all transactions",
+	"listsinceblock-targetconfirmations": "Minimum number of block confirmations of the last block in the result object.  Must be 1 or greater.  Note: The transactions array in the result object is not affected by this parameter",
 	"listsinceblock-includewatchonly":    "Unused",
+	"listsinceblock--condition0":         "blockhash specified",
+	"listsinceblock--condition1":         "no blockhash specified",
+	"listsinceblock--result0":            "Lists all transactions, including unmined transactions, since the specified block",
+	"listsinceblock--result1":            "Lists all transactions since the genesis block",
 
 	// ListSinceBlockResult help.
 	"listsinceblockresult-transactions": "JSON array of objects containing verbose details of the each transaction",
@@ -317,6 +321,14 @@ var helpDescsEnUS = map[string]string{
 	// SignRawTransactionResult help.
 	"signrawtransactionresult-hex":      "The resulting transaction encoded as a hexadecimal string",
 	"signrawtransactionresult-complete": "Whether all input signatures have been created",
+	"signrawtransactionresult-errors":   "Script verification errors (if exists)",
+
+	// SignRawTransactionError help.
+	"signrawtransactionerror-error":     "Verification or signing error related to the input",
+	"signrawtransactionerror-sequence":  "Script sequence number",
+	"signrawtransactionerror-scriptSig": "The hex-encoded signature script",
+	"signrawtransactionerror-txid":      "The transaction hash of the referenced previous output",
+	"signrawtransactionerror-vout":      "The output index of the referenced previous output",
 
 	// ValidateAddressCmd help.
 	"validateaddress--synopsis": "Verify that an address is valid.\n" +
