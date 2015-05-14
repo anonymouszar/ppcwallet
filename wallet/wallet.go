@@ -110,37 +110,10 @@ type Wallet struct {
 	notificationLock   sync.Locker
 
 	chainParams *chaincfg.Params
-	Config      *Config
 	wg          sync.WaitGroup
 	quit        chan struct{}
 
 	minter *Minter // ppc:
-}
-
-// newWallet creates a new Wallet structure with the provided address manager
-// and transaction store.
-func newWallet(mgr *waddrmgr.Manager, txs *wtxmgr.Store, db *walletdb.DB) *Wallet {
-	return &Wallet{
-		db:                  *db,
-		Manager:             mgr,
-		TxStore:             txs,
-		chainSvrLock:        new(sync.Mutex),
-		lockedOutpoints:     map[wire.OutPoint]struct{}{},
-		FeeIncrement:        defaultFeeIncrement,
-		rescanAddJob:        make(chan *RescanJob),
-		rescanBatch:         make(chan *rescanBatch),
-		rescanNotifications: make(chan interface{}),
-		rescanProgress:      make(chan *RescanProgressMsg),
-		rescanFinished:      make(chan *RescanFinishedMsg),
-		createTxRequests:    make(chan createTxRequest),
-		unlockRequests:      make(chan unlockRequest),
-		lockRequests:        make(chan struct{}),
-		holdUnlockRequests:  make(chan chan HeldUnlock),
-		lockState:           make(chan bool),
-		changePassphrase:    make(chan changePassphraseRequest),
-		notificationLock:    new(sync.Mutex),
-		quit:                make(chan struct{}),
-	}
 }
 
 // ErrDuplicateListen is returned for any attempts to listen for the same
@@ -587,7 +560,8 @@ out:
 			continue
 
 		case req := <-w.changePassphrase:
-			err := w.Manager.ChangePassphrase(req.old, req.new, true)
+			err := w.Manager.ChangePassphrase(req.old, req.new, true,
+				&waddrmgr.DefaultScryptOptions)
 			req.err <- err
 			continue
 
@@ -624,12 +598,14 @@ out:
 
 		// Select statement fell through by an explicit lock or the
 		// timer expiring.  Lock the manager here.
-		timeout = nil
-		err := w.Manager.Lock()
-		if err != nil {
-			log.Errorf("Could not lock wallet: %v", err)
-		} else {
-			w.notifyLockStateChange(true)
+		if timeout != nil {
+			timeout = nil
+			err := w.Manager.Lock()
+			if err != nil {
+				log.Errorf("Could not lock wallet: %v", err)
+			} else {
+				w.notifyLockStateChange(true)
+			}
 		}
 	}
 	w.wg.Done()
@@ -861,7 +837,7 @@ func ListTransactions(details *wtxmgr.TxDetails, syncHeight int32, net *chaincfg
 	var (
 		blockHashStr  string
 		blockTime     int64
-		confirmations int64 = -1
+		confirmations int64
 	)
 	if details.Block.Height != -1 {
 		blockHashStr = details.Block.Hash.String()
@@ -1633,15 +1609,88 @@ func (w *Wallet) TotalReceivedForAddr(addr btcutil.Address, minConf int32) (btcu
 	return amount, err
 }
 
-// Db returns wallet db being used by a wallet
-func (w *Wallet) Db() walletdb.DB {
-	return w.db
+// SendPairs creates and sends payment transactions. It returns the transaction
+// hash upon success
+func (w *Wallet) SendPairs(amounts map[string]btcutil.Amount, account uint32,
+	minconf int32) (*wire.ShaHash, error) {
+
+	// Create transaction, replying with an error if the creation
+	// was not successful.
+	createdTx, err := w.CreateSimpleTx(account, amounts, minconf)
+	if err != nil {
+		return nil, err
+	}
+
+	// Create transaction record and insert into the db.
+	rec, err := wtxmgr.NewTxRecordFromMsgTx(createdTx.MsgTx)
+	if err != nil {
+		log.Errorf("Cannot create record for created transaction: %v", err)
+		return nil, err
+	}
+	err = w.TxStore.InsertTx(rec, nil)
+	if err != nil {
+		log.Errorf("Error adding sent tx history: %v", err)
+		return nil, err
+	}
+
+	if createdTx.ChangeIndex >= 0 {
+		err = w.TxStore.AddCredit(rec, nil, uint32(createdTx.ChangeIndex), true)
+		if err != nil {
+			log.Errorf("Error adding change address for sent "+
+				"tx: %v", err)
+			return nil, err
+		}
+	}
+
+	// TODO: The record already has the serialized tx, so no need to
+	// serialize it again.
+	return w.chainSvr.SendRawTransaction(&rec.MsgTx, false)
 }
 
-// Open opens a wallet from disk.
-func Open(config *Config) *Wallet {
-	wallet := newWallet(config.Waddrmgr, config.TxStore, config.Db)
-	wallet.chainParams = config.ChainParams
+// Open loads an already-created wallet from the passed database and namespaces.
+func Open(pubPass []byte, params *chaincfg.Params, db walletdb.DB, waddrmgrNS, wtxmgrNS walletdb.Namespace, cbs *waddrmgr.OpenCallbacks) (*Wallet, error) {
+	addrMgr, err := waddrmgr.Open(waddrmgrNS, pubPass, params, cbs)
+	if err != nil {
+		return nil, err
+	}
+	txMgr, err := wtxmgr.Open(wtxmgrNS)
+	if err != nil {
+		if !wtxmgr.IsNoExists(err) {
+			return nil, err
+		}
+		log.Info("No recorded transaction history -- needs full rescan")
+		err = addrMgr.SetSyncedTo(nil)
+		if err != nil {
+			return nil, err
+		}
+		txMgr, err = wtxmgr.Create(wtxmgrNS)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	return wallet
+	log.Infof("Opened wallet") // TODO: log balance? last sync height?
+	w := &Wallet{
+		db:                  db,
+		Manager:             addrMgr,
+		TxStore:             txMgr,
+		chainSvrLock:        new(sync.Mutex),
+		lockedOutpoints:     map[wire.OutPoint]struct{}{},
+		FeeIncrement:        defaultFeeIncrement,
+		rescanAddJob:        make(chan *RescanJob),
+		rescanBatch:         make(chan *rescanBatch),
+		rescanNotifications: make(chan interface{}),
+		rescanProgress:      make(chan *RescanProgressMsg),
+		rescanFinished:      make(chan *RescanFinishedMsg),
+		createTxRequests:    make(chan createTxRequest),
+		unlockRequests:      make(chan unlockRequest),
+		lockRequests:        make(chan struct{}),
+		holdUnlockRequests:  make(chan chan HeldUnlock),
+		lockState:           make(chan bool),
+		changePassphrase:    make(chan changePassphraseRequest),
+		notificationLock:    new(sync.Mutex),
+		chainParams:         params,
+		quit:                make(chan struct{}),
+	}
+	return w, nil
 }

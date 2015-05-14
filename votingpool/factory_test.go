@@ -53,7 +53,7 @@ func getUniqueID() uint32 {
 // createWithdrawalTx creates a withdrawalTx with the given input and output amounts.
 func createWithdrawalTx(t *testing.T, pool *Pool, inputAmounts []int64, outputAmounts []int64) *withdrawalTx {
 	net := pool.Manager().ChainParams()
-	tx := newWithdrawalTx()
+	tx := newWithdrawalTx(defaultTxOptions)
 	_, credits := TstCreateCreditsOnNewSeries(t, pool, inputAmounts)
 	for _, c := range credits {
 		tx.addInput(c)
@@ -343,7 +343,7 @@ func TstCreatePool(t *testing.T) (tearDownFunc func(), mgr *waddrmgr.Manager, po
 	if err != nil {
 		t.Fatalf("Failed to create addr manager DB namespace: %v", err)
 	}
-	var fastScrypt = &waddrmgr.Options{ScryptN: 16, ScryptR: 8, ScryptP: 1}
+	var fastScrypt = &waddrmgr.ScryptOptions{N: 16, R: 8, P: 1}
 	mgr, err = waddrmgr.Create(mgrNamespace, seed, pubPassphrase, privPassphrase,
 		&chaincfg.MainNetParams, fastScrypt)
 	if err != nil {
@@ -417,6 +417,32 @@ func TstNewChangeAddress(t *testing.T, p *Pool, seriesID uint32, idx Index) (add
 	return addr
 }
 
-func TstConstantFee(fee btcutil.Amount) func(tx *withdrawalTx) btcutil.Amount {
-	return func(tx *withdrawalTx) btcutil.Amount { return fee }
+func TstConstantFee(fee btcutil.Amount) func() btcutil.Amount {
+	return func() btcutil.Amount { return fee }
+}
+
+func createAndFulfillWithdrawalRequests(t *testing.T, pool *Pool, roundID uint32) withdrawalInfo {
+
+	params := pool.Manager().ChainParams()
+	seriesID, eligible := TstCreateCreditsOnNewSeries(t, pool, []int64{2e6, 4e6})
+	requests := []OutputRequest{
+		TstNewOutputRequest(t, 1, "34eVkREKgvvGASZW7hkgE2uNc1yycntMK6", 3e6, params),
+		TstNewOutputRequest(t, 2, "3PbExiaztsSYgh6zeMswC49hLUwhTQ86XG", 2e6, params),
+	}
+	changeStart := TstNewChangeAddress(t, pool, seriesID, 0)
+	dustThreshold := btcutil.Amount(1e4)
+	startAddr := TstNewWithdrawalAddress(t, pool, seriesID, 1, 0)
+	lastSeriesID := seriesID
+	w := newWithdrawal(roundID, requests, eligible, *changeStart)
+	if err := w.fulfillRequests(); err != nil {
+		t.Fatal(err)
+	}
+	return withdrawalInfo{
+		requests:      requests,
+		startAddress:  *startAddr,
+		changeStart:   *changeStart,
+		lastSeriesID:  lastSeriesID,
+		dustThreshold: dustThreshold,
+		status:        *w.status,
+	}
 }

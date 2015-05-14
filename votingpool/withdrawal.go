@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/ppcsuite/ppcd/txscript"
 	"github.com/ppcsuite/ppcd/wire"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
+	"github.com/ppcsuite/ppcwallet/walletdb"
 	"github.com/ppcsuite/ppcwallet/wtxmgr"
 )
 
@@ -83,7 +85,7 @@ type WithdrawalOutput struct {
 	outpoints []OutBailmentOutpoint
 }
 
-// OutBailmentOutpoint represents one of the outpoints created to fulfil an OutputRequest.
+// OutBailmentOutpoint represents one of the outpoints created to fulfill an OutputRequest.
 type OutBailmentOutpoint struct {
 	ntxid  Ntxid
 	index  uint32
@@ -107,6 +109,18 @@ type WithdrawalStatus struct {
 	outputs        map[OutBailmentID]*WithdrawalOutput
 	sigs           map[Ntxid]TxSigs
 	transactions   map[Ntxid]changeAwareTx
+}
+
+// withdrawalInfo contains all the details of an existing withdrawal, including
+// the original request parameters and the WithdrawalStatus returned by
+// StartWithdrawal.
+type withdrawalInfo struct {
+	requests      []OutputRequest
+	startAddress  WithdrawalAddress
+	changeStart   ChangeAddress
+	lastSeriesID  uint32
+	dustThreshold btcutil.Amount
+	status        WithdrawalStatus
 }
 
 // TxSigs is list of raw signatures (one for every pubkey in the multi-sig
@@ -254,6 +268,10 @@ type withdrawal struct {
 	pendingRequests []OutputRequest
 	eligibleInputs  []credit
 	current         *withdrawalTx
+	// txOptions is a function called for every new withdrawalTx created as
+	// part of this withdrawal. It is defined as a function field because it
+	// exists mainly so that tests can mock withdrawalTx fields.
+	txOptions func(tx *withdrawalTx)
 }
 
 // withdrawalTxOut wraps an OutputRequest and provides a separate amount field.
@@ -286,10 +304,26 @@ type withdrawalTx struct {
 
 	// changeOutput holds information about the change for this transaction.
 	changeOutput *wire.TxOut
+
+	// calculateSize returns the estimated serialized size (in bytes) of this
+	// tx. See calculateTxSize() for details on how that's done. We use a
+	// struct field instead of a method so that it can be replaced in tests.
+	calculateSize func() int
+	// calculateFee calculates the expected network fees for this tx. We use a
+	// struct field instead of a method so that it can be replaced in tests.
+	calculateFee func() btcutil.Amount
 }
 
-func newWithdrawalTx() *withdrawalTx {
-	return &withdrawalTx{}
+// newWithdrawalTx creates a new withdrawalTx and calls setOptions()
+// passing the newly created tx.
+func newWithdrawalTx(setOptions func(tx *withdrawalTx)) *withdrawalTx {
+	tx := &withdrawalTx{}
+	tx.calculateSize = func() int { return calculateTxSize(tx) }
+	tx.calculateFee = func() btcutil.Amount {
+		return btcutil.Amount(1+tx.calculateSize()/1000) * feeIncrement
+	}
+	setOptions(tx)
+	return tx
 }
 
 // ntxid returns the unique ID for this transaction.
@@ -300,6 +334,15 @@ func (tx *withdrawalTx) ntxid() Ntxid {
 		txin.SignatureScript = empty
 	}
 	return Ntxid(msgtx.TxSha().String())
+}
+
+// isTooBig returns true if the size (in bytes) of the given tx is greater
+// than or equal to txMaxSize.
+func (tx *withdrawalTx) isTooBig() bool {
+	// In bitcoind a tx is considered standard only if smaller than
+	// MAX_STANDARD_TX_SIZE; that's why we consider anything >= txMaxSize to
+	// be too big.
+	return tx.calculateSize() >= txMaxSize
 }
 
 // inputTotal returns the sum amount of all inputs in this tx.
@@ -377,7 +420,7 @@ func (tx *withdrawalTx) removeInput() credit {
 // added after it's called. Also, callsites must make sure adding a change
 // output won't cause the tx to exceed the size limit.
 func (tx *withdrawalTx) addChange(pkScript []byte) bool {
-	tx.fee = calculateTxFee(tx)
+	tx.fee = tx.calculateFee()
 	change := tx.inputTotal() - tx.outputTotal() - tx.fee
 	log.Debugf("addChange: input total %v, output total %v, fee %v", tx.inputTotal(),
 		tx.outputTotal(), tx.fee)
@@ -406,7 +449,7 @@ func (tx *withdrawalTx) rollBackLastOutput() ([]credit, *withdrawalTxOut, error)
 
 	var removedInputs []credit
 	// Continue until sum(in) < sum(out) + fee
-	for tx.inputTotal() >= tx.outputTotal()+calculateTxFee(tx) {
+	for tx.inputTotal() >= tx.outputTotal()+tx.calculateFee() {
 		removedInputs = append(removedInputs, tx.removeInput())
 	}
 
@@ -415,6 +458,8 @@ func (tx *withdrawalTx) rollBackLastOutput() ([]credit, *withdrawalTxOut, error)
 	removedInputs = removedInputs[:len(removedInputs)-1]
 	return removedInputs, removedOutput, nil
 }
+
+func defaultTxOptions(tx *withdrawalTx) {}
 
 func newWithdrawal(roundID uint32, requests []OutputRequest, inputs []credit,
 	changeStart ChangeAddress) *withdrawal {
@@ -428,10 +473,10 @@ func newWithdrawal(roundID uint32, requests []OutputRequest, inputs []credit,
 	}
 	return &withdrawal{
 		roundID:         roundID,
-		current:         newWithdrawalTx(),
 		pendingRequests: requests,
 		eligibleInputs:  inputs,
 		status:          status,
+		txOptions:       defaultTxOptions,
 	}
 }
 
@@ -442,10 +487,20 @@ func newWithdrawal(roundID uint32, requests []OutputRequest, inputs []credit,
 // signature lists (one for every private key available to this wallet) for each
 // of those transaction's inputs. More details about the actual algorithm can be
 // found at http://opentransactions.org/wiki/index.php/Startwithdrawal
+// This method must be called with the address manager unlocked.
 func (p *Pool) StartWithdrawal(roundID uint32, requests []OutputRequest,
 	startAddress WithdrawalAddress, lastSeriesID uint32, changeStart ChangeAddress,
 	txStore *wtxmgr.Store, chainHeight int32, dustThreshold btcutil.Amount) (
 	*WithdrawalStatus, error) {
+
+	status, err := getWithdrawalStatus(p, roundID, requests, startAddress, lastSeriesID,
+		changeStart, dustThreshold)
+	if err != nil {
+		return nil, err
+	}
+	if status != nil {
+		return status, nil
+	}
 
 	eligible, err := p.getEligibleInputs(txStore, startAddress, lastSeriesID, dustThreshold,
 		chainHeight, eligibleInputMinConfirmations)
@@ -458,6 +513,19 @@ func (p *Pool) StartWithdrawal(roundID uint32, requests []OutputRequest,
 		return nil, err
 	}
 	w.status.sigs, err = getRawSigs(w.transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	serialized, err := serializeWithdrawal(requests, startAddress, lastSeriesID, changeStart,
+		dustThreshold, *w.status)
+	if err != nil {
+		return nil, err
+	}
+	err = p.namespace.Update(
+		func(tx walletdb.Tx) error {
+			return putWithdrawal(tx, p.ID, roundID, serialized)
+		})
 	if err != nil {
 		return nil, err
 	}
@@ -481,17 +549,14 @@ func (w *withdrawal) pushRequest(request OutputRequest) {
 // popInput removes and returns the first input from the stack of eligible
 // inputs.
 func (w *withdrawal) popInput() credit {
-	input := w.eligibleInputs[0]
-	w.eligibleInputs = w.eligibleInputs[1:]
+	input := w.eligibleInputs[len(w.eligibleInputs)-1]
+	w.eligibleInputs = w.eligibleInputs[:len(w.eligibleInputs)-1]
 	return input
 }
 
 // pushInput adds a new input to the top of the stack of eligible inputs.
-// TODO: Reverse the stack semantics here as the current one generates a lot of
-// extra garbage since it always creates a new single-element slice and append
-// the rest of the items to it.
 func (w *withdrawal) pushInput(input credit) {
-	w.eligibleInputs = append([]credit{input}, w.eligibleInputs...)
+	w.eligibleInputs = append(w.eligibleInputs, input)
 }
 
 // If this returns it means we have added an output and the necessary inputs to fulfil that
@@ -505,11 +570,11 @@ func (w *withdrawal) fulfillNextRequest() error {
 	output.status = statusSuccess
 	w.current.addOutput(request)
 
-	if isTxTooBig(w.current) {
+	if w.current.isTooBig() {
 		return w.handleOversizeTx()
 	}
 
-	fee := calculateTxFee(w.current)
+	fee := w.current.calculateFee()
 	for w.current.inputTotal() < w.current.outputTotal()+fee {
 		if len(w.eligibleInputs) == 0 {
 			log.Debug("Splitting last output because we don't have enough inputs")
@@ -519,9 +584,9 @@ func (w *withdrawal) fulfillNextRequest() error {
 			break
 		}
 		w.current.addInput(w.popInput())
-		fee = calculateTxFee(w.current)
+		fee = w.current.calculateFee()
 
-		if isTxTooBig(w.current) {
+		if w.current.isTooBig() {
 			return w.handleOversizeTx()
 		}
 	}
@@ -603,7 +668,7 @@ func (w *withdrawal) finalizeCurrentTx() error {
 	}
 
 	w.transactions = append(w.transactions, tx)
-	w.current = newWithdrawalTx()
+	w.current = newWithdrawalTx(w.txOptions)
 	return nil
 }
 
@@ -639,12 +704,13 @@ func (w *withdrawal) fulfillRequests() error {
 	// Sort outputs by outBailmentID (hash(server ID, tx #))
 	sort.Sort(byOutBailmentID(w.pendingRequests))
 
+	w.current = newWithdrawalTx(w.txOptions)
 	for len(w.pendingRequests) > 0 {
 		if err := w.fulfillNextRequest(); err != nil {
 			return err
 		}
 		tx := w.current
-		if len(w.eligibleInputs) == 0 && tx.inputTotal() <= tx.outputTotal()+calculateTxFee(tx) {
+		if len(w.eligibleInputs) == 0 && tx.inputTotal() <= tx.outputTotal()+tx.calculateFee() {
 			// We don't have more eligible inputs and all the inputs in the
 			// current tx have been spent.
 			break
@@ -687,7 +753,7 @@ func (w *withdrawal) splitLastOutput() error {
 	output := tx.outputs[len(tx.outputs)-1]
 	log.Debugf("Splitting tx output for %s", output.request)
 	origAmount := output.amount
-	spentAmount := tx.outputTotal() + calculateTxFee(tx) - output.amount
+	spentAmount := tx.outputTotal() + tx.calculateFee() - output.amount
 	// This is how much we have left after satisfying all outputs except the last
 	// one. IOW, all we have left for the last output, so we set that as the
 	// amount of the tx's last output.
@@ -720,6 +786,74 @@ func (s *WithdrawalStatus) updateStatusFor(tx *withdrawalTx) {
 		// that gives us the amount of credits in a given series.
 		// http://opentransactions.org/wiki/index.php/Update_Status
 	}
+}
+
+// match returns true if the given arguments match the fields in this
+// withdrawalInfo. For the requests slice, the order of the items does not
+// matter.
+func (wi *withdrawalInfo) match(requests []OutputRequest, startAddress WithdrawalAddress,
+	lastSeriesID uint32, changeStart ChangeAddress, dustThreshold btcutil.Amount) bool {
+	// Use reflect.DeepEqual to compare changeStart and startAddress as they're
+	// structs that contain pointers and we want to compare their content and
+	// not their address.
+	if !reflect.DeepEqual(changeStart, wi.changeStart) {
+		log.Debugf("withdrawal changeStart does not match: %v != %v", changeStart, wi.changeStart)
+		return false
+	}
+	if !reflect.DeepEqual(startAddress, wi.startAddress) {
+		log.Debugf("withdrawal startAddr does not match: %v != %v", startAddress, wi.startAddress)
+		return false
+	}
+	if lastSeriesID != wi.lastSeriesID {
+		log.Debugf("withdrawal lastSeriesID does not match: %v != %v", lastSeriesID,
+			wi.lastSeriesID)
+		return false
+	}
+	if dustThreshold != wi.dustThreshold {
+		log.Debugf("withdrawal dustThreshold does not match: %v != %v", dustThreshold,
+			wi.dustThreshold)
+		return false
+	}
+	r1 := make([]OutputRequest, len(requests))
+	copy(r1, requests)
+	r2 := make([]OutputRequest, len(wi.requests))
+	copy(r2, wi.requests)
+	sort.Sort(byOutBailmentID(r1))
+	sort.Sort(byOutBailmentID(r2))
+	if !reflect.DeepEqual(r1, r2) {
+		log.Debugf("withdrawal requests does not match: %v != %v", requests, wi.requests)
+		return false
+	}
+	return true
+}
+
+// getWithdrawalStatus returns the existing WithdrawalStatus for the given
+// withdrawal parameters, if one exists. This function must be called with the
+// address manager unlocked.
+func getWithdrawalStatus(p *Pool, roundID uint32, requests []OutputRequest,
+	startAddress WithdrawalAddress, lastSeriesID uint32, changeStart ChangeAddress,
+	dustThreshold btcutil.Amount) (*WithdrawalStatus, error) {
+
+	var serialized []byte
+	err := p.namespace.View(
+		func(tx walletdb.Tx) error {
+			serialized = getWithdrawal(tx, p.ID, roundID)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+	if bytes.Equal(serialized, []byte{}) {
+		return nil, nil
+	}
+	wInfo, err := deserializeWithdrawal(p, serialized)
+	if err != nil {
+		return nil, err
+	}
+	if wInfo.match(requests, startAddress, lastSeriesID, changeStart, dustThreshold) {
+		return &wInfo.status, nil
+	}
+	return nil, nil
 }
 
 // getRawSigs iterates over the inputs of each transaction given, constructing the
@@ -881,26 +1015,9 @@ func validateSigScript(msgtx *wire.MsgTx, idx int, pkScript []byte) error {
 	return nil
 }
 
-// calculateTxFee calculates the expected network fees for a given tx. We use
-// a variable instead of a function so that it can be replaced in tests.
-var calculateTxFee = func(tx *withdrawalTx) btcutil.Amount {
-	return btcutil.Amount(1+calculateTxSize(tx)/1000) * feeIncrement
-}
-
-// isTxTooBig returns true if the size (in bytes) of the given tx is greater
-// than or equal to txMaxSize. It is defined as a variable so it can be
-// replaced for testing purposes.
-var isTxTooBig = func(tx *withdrawalTx) bool {
-	// In bitcoind a tx is considered standard only if smaller than
-	// MAX_STANDARD_TX_SIZE; that's why we consider anything >= txMaxSize to
-	// be too big.
-	return calculateTxSize(tx) >= txMaxSize
-}
-
 // calculateTxSize returns an estimate of the serialized size (in bytes) of the
-// given transaction. It assumes all tx inputs are P2SH multi-sig.  We use a
-// variable instead of a function so that it can be replaced in tests.
-var calculateTxSize = func(tx *withdrawalTx) int {
+// given transaction. It assumes all tx inputs are P2SH multi-sig.
+func calculateTxSize(tx *withdrawalTx) int {
 	msgtx := tx.toMsgTx()
 	// Assume that there will always be a change output, for simplicity. We
 	// simulate that by simply copying the first output as all we care about is
