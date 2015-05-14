@@ -659,13 +659,13 @@ func (w *Wallet) ppcFindEligibleOutputs(minconf int32, bs *waddrmgr.BlockStamp) 
 		}
 
 		// Filter out unspendable outputs, that is, remove those that
-		// (at this time) are not P2PKH outputs.  Other inputs must be
+		// (at this time) are not P2PK/P2PKH outputs.  Other inputs must be
 		// manually included in transactions and sent (for example,
 		// using createrawtransaction, signrawtransaction, and
 		// sendrawtransaction).
 		class, _, _, err := txscript.ExtractPkScriptAddrs(
 			output.PkScript, w.chainParams)
-		if err != nil || class != txscript.PubKeyHashTy {
+		if err != nil || (class != txscript.PubKeyTy && class != txscript.PubKeyHashTy) {
 			continue
 		}
 
