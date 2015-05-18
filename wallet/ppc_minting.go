@@ -318,7 +318,7 @@ func (w *Wallet) CreateCoinStake(bits uint32, nSearchTime int64, nSearchInterval
 	if fKernelFound {
 		if w.Manager.IsLocked() {
 			err = errors.New(
-				"Valid kernel hash was found but manager is locked!")
+				"Valid kernel hash was found but manager is locked!\a") // Beep
 		} else {
 			coinStakeTx, err = w.createCoinstakeTx(
 				foundStake, csTxTime, eligibles)
