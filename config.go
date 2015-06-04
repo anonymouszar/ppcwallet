@@ -26,7 +26,7 @@ import (
 
 	flags "github.com/btcsuite/go-flags"
 	"github.com/ppcsuite/btcutil"
-	"github.com/ppcsuite/ppcwallet/legacy/keystore"
+	"github.com/ppcsuite/ppcwallet/internal/legacy/keystore"
 )
 
 const (

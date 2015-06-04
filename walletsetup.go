@@ -31,7 +31,7 @@ import (
 	"github.com/ppcsuite/ppcd/btcec"
 	"github.com/ppcsuite/ppcd/chaincfg"
 	"github.com/ppcsuite/ppcd/wire"
-	"github.com/ppcsuite/ppcwallet/legacy/keystore"
+	"github.com/ppcsuite/ppcwallet/internal/legacy/keystore"
 	"github.com/ppcsuite/ppcwallet/waddrmgr"
 	"github.com/ppcsuite/ppcwallet/wallet"
 	"github.com/ppcsuite/ppcwallet/walletdb"

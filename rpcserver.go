@@ -172,41 +172,6 @@ func (c *websocketClient) send(b []byte) error {
 	}
 }
 
-// isManagerLockedError returns whether or not the passed error is due to the
-// address manager being locked.
-func isManagerLockedError(err error) bool {
-	merr, ok := err.(waddrmgr.ManagerError)
-	return ok && merr.ErrorCode == waddrmgr.ErrLocked
-}
-
-// isManagerWrongPassphraseError returns whether or not the passed error is due
-// to the address manager being provided with an invalid passprhase.
-func isManagerWrongPassphraseError(err error) bool {
-	merr, ok := err.(waddrmgr.ManagerError)
-	return ok && merr.ErrorCode == waddrmgr.ErrWrongPassphrase
-}
-
-// isManagerDuplicateAddressError returns whether or not the passed error is due to a
-// duplicate item being provided to the address manager.
-func isManagerDuplicateAddressError(err error) bool {
-	merr, ok := err.(waddrmgr.ManagerError)
-	return ok && merr.ErrorCode == waddrmgr.ErrDuplicateAddress
-}
-
-// isManagerAddressNotFoundError returns whether or not the passed error is due to a
-// the address not being found.
-func isManagerAddressNotFoundError(err error) bool {
-	merr, ok := err.(waddrmgr.ManagerError)
-	return ok && merr.ErrorCode == waddrmgr.ErrAddressNotFound
-}
-
-// isManagerAccountNotFoundError returns whether or not the passed error is due
-// to the account not being found.
-func isManagerAccountNotFoundError(err error) bool {
-	merr, ok := err.(waddrmgr.ManagerError)
-	return ok && merr.ErrorCode == waddrmgr.ErrAccountNotFound
-}
-
 // parseListeners splits the list of listen addresses passed in addrs into
 // IPv4 and IPv6 slices and returns them.  This allows easy creation of the
 // listeners on the correct interface "tcp4" and "tcp6".  It also properly
@@ -1462,7 +1427,7 @@ func jsonError(err error) *btcjson.RPCError {
 		return nil
 	}
 
-	var code btcjson.RPCErrorCode
+	code := btcjson.ErrRPCWallet
 	switch e := err.(type) {
 	case btcjson.RPCError:
 		return &e
@@ -1474,8 +1439,11 @@ func jsonError(err error) *btcjson.RPCError {
 		code = btcjson.ErrRPCInvalidParameter
 	case ParseError:
 		code = btcjson.ErrRPCParse.Code
-	default: // All other errors get the wallet error code.
-		code = btcjson.ErrRPCWallet
+	case waddrmgr.ManagerError:
+		switch e.ErrorCode {
+		case waddrmgr.ErrWrongPassphrase:
+			code = btcjson.ErrRPCWalletPassphraseIncorrect
+		}
 	}
 	return &btcjson.RPCError{
 		Code:    code,
@@ -1591,7 +1559,7 @@ func DumpPrivKey(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{}) (in
 	}
 
 	key, err := w.DumpWIFPrivateKey(addr)
-	if isManagerLockedError(err) {
+	if waddrmgr.IsError(err, waddrmgr.ErrLocked) {
 		// Address was found, but the private key isn't
 		// accessible.
 		return nil, &ErrWalletUnlockNeeded
@@ -1604,7 +1572,7 @@ func DumpPrivKey(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{}) (in
 // TODO: finish this to match bitcoind by writing the dump to a file.
 func DumpWallet(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{}) (interface{}, error) {
 	keys, err := w.DumpPrivKeys()
-	if isManagerLockedError(err) {
+	if waddrmgr.IsError(err, waddrmgr.ErrLocked) {
 		return nil, &ErrWalletUnlockNeeded
 	}
 
@@ -1847,10 +1815,10 @@ func ImportPrivKey(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{}) (
 	// Import the private key, handling any errors.
 	_, err = w.ImportPrivateKey(wif, nil, *cmd.Rescan)
 	switch {
-	case isManagerDuplicateAddressError(err):
+	case waddrmgr.IsError(err, waddrmgr.ErrDuplicateAddress):
 		// Do not return duplicate key errors to the client.
 		return nil, nil
-	case isManagerLockedError(err):
+	case waddrmgr.IsError(err, waddrmgr.ErrLocked):
 		return nil, &ErrWalletUnlockNeeded
 	}
 
@@ -1892,7 +1860,7 @@ func CreateNewAccount(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{}
 	}
 
 	_, err = w.Manager.NewAccount(cmd.Account)
-	if isManagerLockedError(err) {
+	if waddrmgr.IsError(err, waddrmgr.ErrLocked) {
 		return nil, &btcjson.RPCError{
 			Code: btcjson.ErrRPCWalletUnlockNeeded,
 			Message: "Creating an account requires the wallet to be unlocked. " +
@@ -2598,7 +2566,7 @@ func sendPairs(w *wallet.Wallet, amounts map[string]btcutil.Amount,
 		if err == wallet.ErrNonPositiveAmount {
 			return "", ErrNeedPositiveAmount
 		}
-		if isManagerLockedError(err) {
+		if waddrmgr.IsError(err, waddrmgr.ErrLocked) {
 			return "", &ErrWalletUnlockNeeded
 		}
 		switch err.(type) {
@@ -3110,7 +3078,7 @@ func ValidateAddress(w *wallet.Wallet, chainSvr *chain.Client, icmd interface{})
 
 	ainfo, err := w.Manager.Address(addr)
 	if err != nil {
-		if isManagerAddressNotFoundError(err) {
+		if waddrmgr.IsError(err, waddrmgr.ErrAddressNotFound) {
 			// No additional information available about the address.
 			return result, nil
 		}
@@ -3250,7 +3218,7 @@ func WalletPassphraseChange(w *wallet.Wallet, chainSvr *chain.Client, icmd inter
 
 	err := w.ChangePassphrase([]byte(cmd.OldPassphrase),
 		[]byte(cmd.NewPassphrase))
-	if isManagerWrongPassphraseError(err) {
+	if waddrmgr.IsError(err, waddrmgr.ErrWrongPassphrase) {
 		return nil, &btcjson.RPCError{
 			Code:    btcjson.ErrRPCWalletPassphraseIncorrect,
 			Message: "Incorrect passphrase",
