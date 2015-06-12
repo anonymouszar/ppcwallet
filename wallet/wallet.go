@@ -56,11 +56,6 @@ var (
 	wtxmgrNamespaceKey   = []byte("wtxmgr")
 )
 
-type noopLocker struct{}
-
-func (noopLocker) Lock()   {}
-func (noopLocker) Unlock() {}
-
 // Wallet is a structure containing all the components for a
 // complete wallet.  It contains the Armory-style key store
 // addresses and keys),
@@ -71,7 +66,7 @@ type Wallet struct {
 	TxStore *wtxmgr.Store
 
 	chainSvr        *chain.Client
-	chainSvrLock    sync.Locker
+	chainSvrLock    sync.Mutex
 	chainSvrSynced  bool
 	chainSvrSyncMtx sync.Mutex
 
@@ -107,7 +102,7 @@ type Wallet struct {
 	lockStateChanges   chan bool // true when locked
 	confirmedBalance   chan btcutil.Amount
 	unconfirmedBalance chan btcutil.Amount
-	notificationLock   sync.Locker
+	notificationMu     sync.Mutex
 
 	chainParams *chaincfg.Params
 	wg          sync.WaitGroup
@@ -121,36 +116,19 @@ type Wallet struct {
 // multiple places, they must broadcast it themself.
 var ErrDuplicateListen = errors.New("duplicate listen")
 
-func (w *Wallet) updateNotificationLock() {
-	switch {
-	case w.connectedBlocks == nil:
-		fallthrough
-	case w.disconnectedBlocks == nil:
-		fallthrough
-	case w.lockStateChanges == nil:
-		fallthrough
-	case w.confirmedBalance == nil:
-		fallthrough
-	case w.unconfirmedBalance == nil:
-		return
-	}
-	w.notificationLock = noopLocker{}
-}
-
 // ListenConnectedBlocks returns a channel that passes all blocks that a wallet
 // has been marked in sync with. The channel must be read, or other wallet
 // methods will block.
 //
 // If this is called twice, ErrDuplicateListen is returned.
 func (w *Wallet) ListenConnectedBlocks() (<-chan waddrmgr.BlockStamp, error) {
-	w.notificationLock.Lock()
-	defer w.notificationLock.Unlock()
+	defer w.notificationMu.Unlock()
+	w.notificationMu.Lock()
 
 	if w.connectedBlocks != nil {
 		return nil, ErrDuplicateListen
 	}
 	w.connectedBlocks = make(chan waddrmgr.BlockStamp)
-	w.updateNotificationLock()
 	return w.connectedBlocks, nil
 }
 
@@ -160,14 +138,13 @@ func (w *Wallet) ListenConnectedBlocks() (<-chan waddrmgr.BlockStamp, error) {
 //
 // If this is called twice, ErrDuplicateListen is returned.
 func (w *Wallet) ListenDisconnectedBlocks() (<-chan waddrmgr.BlockStamp, error) {
-	w.notificationLock.Lock()
-	defer w.notificationLock.Unlock()
+	defer w.notificationMu.Unlock()
+	w.notificationMu.Lock()
 
 	if w.disconnectedBlocks != nil {
 		return nil, ErrDuplicateListen
 	}
 	w.disconnectedBlocks = make(chan waddrmgr.BlockStamp)
-	w.updateNotificationLock()
 	return w.disconnectedBlocks, nil
 }
 
@@ -178,14 +155,13 @@ func (w *Wallet) ListenDisconnectedBlocks() (<-chan waddrmgr.BlockStamp, error) 
 //
 // If this is called twice, ErrDuplicateListen is returned.
 func (w *Wallet) ListenLockStatus() (<-chan bool, error) {
-	w.notificationLock.Lock()
-	defer w.notificationLock.Unlock()
+	defer w.notificationMu.Unlock()
+	w.notificationMu.Lock()
 
 	if w.lockStateChanges != nil {
 		return nil, ErrDuplicateListen
 	}
 	w.lockStateChanges = make(chan bool)
-	w.updateNotificationLock()
 	return w.lockStateChanges, nil
 }
 
@@ -195,14 +171,13 @@ func (w *Wallet) ListenLockStatus() (<-chan bool, error) {
 //
 // If this is called twice, ErrDuplicateListen is returned.
 func (w *Wallet) ListenConfirmedBalance() (<-chan btcutil.Amount, error) {
-	w.notificationLock.Lock()
-	defer w.notificationLock.Unlock()
+	defer w.notificationMu.Unlock()
+	w.notificationMu.Lock()
 
 	if w.confirmedBalance != nil {
 		return nil, ErrDuplicateListen
 	}
 	w.confirmedBalance = make(chan btcutil.Amount)
-	w.updateNotificationLock()
 	return w.confirmedBalance, nil
 }
 
@@ -212,14 +187,13 @@ func (w *Wallet) ListenConfirmedBalance() (<-chan btcutil.Amount, error) {
 //
 // If this is called twice, ErrDuplicateListen is returned.
 func (w *Wallet) ListenUnconfirmedBalance() (<-chan btcutil.Amount, error) {
-	w.notificationLock.Lock()
-	defer w.notificationLock.Unlock()
+	defer w.notificationMu.Unlock()
+	w.notificationMu.Lock()
 
 	if w.unconfirmedBalance != nil {
 		return nil, ErrDuplicateListen
 	}
 	w.unconfirmedBalance = make(chan btcutil.Amount)
-	w.updateNotificationLock()
 	return w.unconfirmedBalance, nil
 }
 
@@ -229,63 +203,62 @@ func (w *Wallet) ListenUnconfirmedBalance() (<-chan btcutil.Amount, error) {
 //
 // If this is called twice, ErrDuplicateListen is returned.
 func (w *Wallet) ListenRelevantTxs() (<-chan chain.RelevantTx, error) {
-	defer w.notificationLock.Unlock()
-	w.notificationLock.Lock()
+	defer w.notificationMu.Unlock()
+	w.notificationMu.Lock()
 
 	if w.relevantTxs != nil {
 		return nil, ErrDuplicateListen
 	}
 	w.relevantTxs = make(chan chain.RelevantTx)
-	w.updateNotificationLock()
 	return w.relevantTxs, nil
 }
 
 func (w *Wallet) notifyConnectedBlock(block waddrmgr.BlockStamp) {
-	w.notificationLock.Lock()
+	w.notificationMu.Lock()
 	if w.connectedBlocks != nil {
 		w.connectedBlocks <- block
 	}
-	w.notificationLock.Unlock()
+	w.notificationMu.Unlock()
 }
 
 func (w *Wallet) notifyDisconnectedBlock(block waddrmgr.BlockStamp) {
-	w.notificationLock.Lock()
+	w.notificationMu.Lock()
 	if w.disconnectedBlocks != nil {
 		w.disconnectedBlocks <- block
 	}
-	w.notificationLock.Unlock()
+	w.notificationMu.Unlock()
 }
 
 func (w *Wallet) notifyLockStateChange(locked bool) {
-	w.notificationLock.Lock()
+	w.notificationMu.Lock()
 	if w.lockStateChanges != nil {
 		w.lockStateChanges <- locked
 	}
-	w.notificationLock.Unlock()
+	w.notificationMu.Unlock()
 }
 
 func (w *Wallet) notifyConfirmedBalance(bal btcutil.Amount) {
-	w.notificationLock.Lock()
+	w.notificationMu.Lock()
 	if w.confirmedBalance != nil {
 		w.confirmedBalance <- bal
 	}
-	w.notificationLock.Unlock()
+	w.notificationMu.Unlock()
 }
 
 func (w *Wallet) notifyUnconfirmedBalance(bal btcutil.Amount) {
-	w.notificationLock.Lock()
+	w.notificationMu.Lock()
 	if w.unconfirmedBalance != nil {
 		w.unconfirmedBalance <- bal
 	}
-	w.notificationLock.Unlock()
+	w.notificationMu.Unlock()
 }
 
 func (w *Wallet) notifyRelevantTx(relevantTx chain.RelevantTx) {
-	w.notificationLock.Lock()
+	w.notificationMu.Lock()
 	if w.relevantTxs != nil {
 		w.relevantTxs <- relevantTx
 	}
-	w.notificationLock.Unlock()
+	w.notificationMu.Unlock()
 }
 
 // Start starts the goroutines necessary to manage a wallet.
@@ -296,11 +269,9 @@ func (w *Wallet) Start(chainServer *chain.Client) {
 	default:
 	}
 
-	w.chainSvrLock.Lock()
 	defer w.chainSvrLock.Unlock()
-
+	w.chainSvrLock.Lock()
 	w.chainSvr = chainServer
-	w.chainSvrLock = noopLocker{}
 
 	w.wg.Add(6)
 	go w.handleChainNotifications()
@@ -1673,7 +1644,6 @@ func Open(pubPass []byte, params *chaincfg.Params, db walletdb.DB, waddrmgrNS, w
 		db:                  db,
 		Manager:             addrMgr,
 		TxStore:             txMgr,
-		chainSvrLock:        new(sync.Mutex),
 		lockedOutpoints:     map[wire.OutPoint]struct{}{},
 		FeeIncrement:        defaultFeeIncrement,
 		rescanAddJob:        make(chan *RescanJob),
@@ -1687,7 +1657,6 @@ func Open(pubPass []byte, params *chaincfg.Params, db walletdb.DB, waddrmgrNS, w
 		holdUnlockRequests:  make(chan chan HeldUnlock),
 		lockState:           make(chan bool),
 		changePassphrase:    make(chan changePassphraseRequest),
-		notificationLock:    new(sync.Mutex),
 		chainParams:         params,
 		quit:                make(chan struct{}),
 	}
