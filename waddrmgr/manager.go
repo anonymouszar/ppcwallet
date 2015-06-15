@@ -1396,7 +1396,9 @@ func (m *Manager) MarkUsed(address btcutil.Address) error {
 		return maybeConvertDbError(err)
 	}
 	// Clear caches which might have stale entries for used addresses
+	m.mtx.Lock()
 	delete(m.addrs, addrKey(addressID))
+	m.mtx.Unlock()
 	return nil
 }
 
